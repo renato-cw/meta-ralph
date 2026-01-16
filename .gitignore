@@ -1,0 +1,20 @@
+# Environment files with credentials
+.env
+*.env
+!.env.example
+
+# Logs
+.ralph-logs/
+.ralph-complete
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
