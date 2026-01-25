@@ -7,9 +7,10 @@ interface IssueRowProps {
   index: number;
   selected: boolean;
   onToggle: (id: string) => void;
+  onRowClick?: (issue: Issue) => void;
 }
 
-export function IssueRow({ issue, index, selected, onToggle }: IssueRowProps) {
+export function IssueRow({ issue, index, selected, onToggle, onRowClick }: IssueRowProps) {
   const severityClass = `badge-${issue.severity.toLowerCase()}`;
 
   const priorityColor =
@@ -18,12 +19,20 @@ export function IssueRow({ issue, index, selected, onToggle }: IssueRowProps) {
     issue.priority >= 40 ? 'text-cyan-400' :
     'text-green-400';
 
+  const handleRowClick = () => {
+    if (onRowClick) {
+      onRowClick(issue);
+    } else {
+      onToggle(issue.id);
+    }
+  };
+
   return (
     <tr
       className={`border-b border-[var(--border)] hover:bg-[var(--card)] cursor-pointer transition-colors ${
         selected ? 'bg-[var(--card)]' : ''
       }`}
-      onClick={() => onToggle(issue.id)}
+      onClick={handleRowClick}
     >
       <td className="p-3">
         <input

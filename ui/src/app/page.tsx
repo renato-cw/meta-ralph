@@ -4,73 +4,22 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { IssueTable } from '@/components/IssueTable';
 import { ProcessButton } from '@/components/ProcessButton';
 import { LogViewer } from '@/components/LogViewer';
-import type { Issue, ProcessingStatus, SortState, SortField, Severity, SEVERITY_ORDER } from '@/lib/types';
-
-/**
- * Severity order for sorting (lower index = more severe).
- */
-const SEVERITY_SORT_ORDER: Record<Severity, number> = {
-  CRITICAL: 0,
-  HIGH: 1,
-  MEDIUM: 2,
-  LOW: 3,
-  INFO: 4,
-};
-
-/**
- * Get sort state from localStorage or return default.
- */
-function getInitialSortState(): SortState {
-  if (typeof window === 'undefined') {
-    return { field: 'priority', direction: 'desc' };
-  }
-  try {
-    const stored = localStorage.getItem('meta-ralph-sort');
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-  return { field: 'priority', direction: 'desc' };
-}
-
-/**
- * Sort issues based on current sort state.
- */
-function sortIssues(issues: Issue[], sort: SortState): Issue[] {
-  const sorted = [...issues];
-  const multiplier = sort.direction === 'asc' ? 1 : -1;
-
-  sorted.sort((a, b) => {
-    switch (sort.field) {
-      case 'priority':
-        return (a.priority - b.priority) * multiplier;
-      case 'severity':
-        return (SEVERITY_SORT_ORDER[a.severity] - SEVERITY_SORT_ORDER[b.severity]) * multiplier;
-      case 'count':
-        return (a.count - b.count) * multiplier;
-      case 'title':
-        return a.title.localeCompare(b.title) * multiplier;
-      case 'provider':
-        return a.provider.localeCompare(b.provider) * multiplier;
-      case 'date':
-        // Fall back to priority if date is not available
-        return (a.priority - b.priority) * multiplier;
-      default:
-        return 0;
-    }
-  });
-
-  return sorted;
-}
+import { SearchBar } from '@/components/search/SearchBar';
+import { FilterBar } from '@/components/filters/FilterBar';
+import { BulkActionBar } from '@/components/actions/BulkActionBar';
+import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
+import { useSort } from '@/hooks/useSort';
+import { useSearch } from '@/hooks/useSearch';
+import { useFilters } from '@/hooks/useFilters';
+import type { Issue, ProcessingStatus, SortField } from '@/lib/types';
 
 export default function Home() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortState>(() => getInitialSortState());
+  const [detailIssue, setDetailIssue] = useState<Issue | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [processing, setProcessing] = useState<ProcessingStatus>({
     isProcessing: false,
     currentIssueId: null,
@@ -79,8 +28,47 @@ export default function Home() {
     failed: [],
   });
 
-  // Memoize sorted issues to avoid re-sorting on every render
-  const sortedIssues = useMemo(() => sortIssues(issues, sort), [issues, sort]);
+  // Use custom hooks for sort, search, and filters
+  const { sort, toggleSort, sortIssues } = useSort();
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    clearQuery: clearSearchQuery,
+    searchIssues,
+    submitSearch,
+    history: searchHistory,
+    selectFromHistory,
+    removeFromHistory,
+    scope: searchScope,
+    setScope: setSearchScope,
+  } = useSearch();
+  const {
+    filters,
+    setFilters,
+    clearFilters,
+    toggleProvider,
+    toggleSeverity,
+    toggleStatus,
+    setPriorityRange,
+    filterIssues,
+    hasActiveFilters,
+    activeFilterCount,
+  } = useFilters({ syncUrl: true });
+
+  // Get unique providers from issues
+  const availableProviders = useMemo(
+    () => [...new Set(issues.map((i) => i.provider))],
+    [issues]
+  );
+
+  // Apply filters, search, and sort in sequence
+  const processedIssues = useMemo(() => {
+    let result = issues;
+    result = filterIssues(result);
+    result = searchIssues(result);
+    result = sortIssues(result);
+    return result;
+  }, [issues, filterIssues, searchIssues, sortIssues]);
 
   const fetchIssues = useCallback(async () => {
     setLoading(true);
@@ -136,7 +124,8 @@ export default function Home() {
   };
 
   const handleSelectAll = () => {
-    setSelectedIds(new Set(issues.map((i) => i.id)));
+    // Select all currently visible (filtered) issues
+    setSelectedIds(new Set(processedIssues.map((i) => i.id)));
   };
 
   const handleDeselectAll = () => {
@@ -144,20 +133,37 @@ export default function Home() {
   };
 
   const handleSort = useCallback((field: SortField) => {
-    setSort((prev) => {
-      const newSort: SortState = {
-        field,
-        // Toggle direction if same field, otherwise default to desc
-        direction: prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc',
-      };
-      // Persist to localStorage
-      try {
-        localStorage.setItem('meta-ralph-sort', JSON.stringify(newSort));
-      } catch {
-        // Ignore localStorage errors
+    toggleSort(field);
+  }, [toggleSort]);
+
+  const handleRowClick = useCallback((issue: Issue) => {
+    setDetailIssue(issue);
+    setIsDetailOpen(true);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setIsDetailOpen(false);
+  }, []);
+
+  const handleProcessSingle = useCallback(async (issueId: string) => {
+    try {
+      const response = await fetch('/api/issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [issueId] }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to start processing');
       }
-      return newSort;
-    });
+
+      const data = await response.json();
+      setProcessing(data.processing);
+      setIsDetailOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start processing');
+    }
   }, []);
 
   const handleProcess = async () => {
@@ -219,9 +225,49 @@ export default function Home() {
         </div>
       )}
 
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
+      {/* Search bar */}
+      <div className="mb-4">
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onSubmit={submitSearch}
+          onClear={clearSearchQuery}
+          scope={searchScope}
+          onScopeChange={setSearchScope}
+          history={searchHistory}
+          onSelectHistory={selectFromHistory}
+          onRemoveHistory={removeFromHistory}
+          placeholder="Search issues by title, description, location, or ID..."
+        />
+      </div>
+
+      {/* Filter bar */}
+      <div className="mb-4">
+        <FilterBar
+          filters={filters}
+          availableProviders={availableProviders}
+          onFilterChange={setFilters}
+          onClearFilters={clearFilters}
+          onToggleProvider={toggleProvider}
+          onToggleSeverity={toggleSeverity}
+          onToggleStatus={toggleStatus}
+          onPriorityRangeChange={setPriorityRange}
+          hasActiveFilters={hasActiveFilters}
+          activeFilterCount={activeFilterCount}
+        />
+      </div>
+
+      {/* Results count */}
+      {(hasActiveFilters || searchQuery) && (
+        <div className="mb-4 text-sm text-[var(--muted)]">
+          Showing {processedIssues.length} of {issues.length} issues
+          {searchQuery && ` matching "${searchQuery}"`}
+        </div>
+      )}
+
+      <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4 mb-20">
         <IssueTable
-          issues={sortedIssues}
+          issues={processedIssues}
           selectedIds={selectedIds}
           onToggle={handleToggle}
           onSelectAll={handleSelectAll}
@@ -229,12 +275,32 @@ export default function Home() {
           loading={loading}
           sort={sort}
           onSort={handleSort}
+          onRowClick={handleRowClick}
         />
       </div>
 
       <LogViewer
         logs={processing.logs}
         isVisible={processing.isProcessing || processing.logs.length > 0}
+      />
+
+      {/* Bulk action bar - shows when items are selected */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        selectedIssues={processedIssues.filter((i) => selectedIds.has(i.id))}
+        totalCount={processedIssues.length}
+        isProcessing={processing.isProcessing}
+        onProcess={handleProcess}
+        onClearSelection={handleDeselectAll}
+      />
+
+      {/* Issue detail panel */}
+      <IssueDetailPanel
+        issue={detailIssue}
+        isOpen={isDetailOpen}
+        onClose={handleCloseDetail}
+        onProcess={handleProcessSingle}
+        isProcessing={processing.isProcessing}
       />
     </div>
   );

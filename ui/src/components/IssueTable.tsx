@@ -12,6 +12,7 @@ interface IssueTableProps {
   loading: boolean;
   sort: SortState;
   onSort: (field: SortField) => void;
+  onRowClick?: (issue: Issue) => void;
 }
 
 /**
@@ -57,6 +58,7 @@ export function IssueTable({
   loading,
   sort,
   onSort,
+  onRowClick,
 }: IssueTableProps) {
   const allSelected = issues.length > 0 && selectedIds.size === issues.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < issues.length;
@@ -126,6 +128,7 @@ export function IssueTable({
               index={index}
               selected={selectedIds.has(issue.id)}
               onToggle={onToggle}
+              onRowClick={onRowClick}
             />
           ))}
         </tbody>
