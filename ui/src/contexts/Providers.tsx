@@ -1,6 +1,7 @@
 'use client';
 
 import { AppProvider } from './AppContext';
+import { ThemeProvider } from './ThemeContext';
 import type { ReactNode } from 'react';
 
 interface ProvidersProps {
@@ -10,6 +11,10 @@ interface ProvidersProps {
 /**
  * Client-side providers wrapper for the application.
  * Use this component in layout.tsx to wrap all providers.
+ *
+ * Provider order (outermost to innermost):
+ * 1. ThemeProvider - Manages theme state and applies theme class to document
+ * 2. AppProvider - Manages application state (issues, filters, etc.)
  *
  * @example
  * // In layout.tsx (Server Component)
@@ -27,8 +32,10 @@ interface ProvidersProps {
  */
 export function Providers({ children }: ProvidersProps) {
   return (
-    <AppProvider>
-      {children}
-    </AppProvider>
+    <ThemeProvider>
+      <AppProvider>
+        {children}
+      </AppProvider>
+    </ThemeProvider>
   );
 }
