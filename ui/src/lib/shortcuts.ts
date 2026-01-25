@@ -113,6 +113,21 @@ export const SHORTCUTS: Record<string, ShortcutDefinition> = {
     description: 'Refresh issues',
     category: 'ui',
   },
+  collapseAll: {
+    key: 'c',
+    description: 'Collapse all groups',
+    category: 'ui',
+  },
+  expandAll: {
+    key: 'e',
+    description: 'Expand all groups',
+    category: 'ui',
+  },
+  cycleGroupBy: {
+    key: 'g',
+    description: 'Cycle group by options',
+    category: 'ui',
+  },
 
   // Quick filters by severity
   filterCritical: {

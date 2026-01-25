@@ -12,6 +12,7 @@ import {
 import { useSort } from '@/hooks/useSort';
 import { useSearch, type SearchScope } from '@/hooks/useSearch';
 import { useFilters } from '@/hooks/useFilters';
+import { useGrouping, type GroupedIssues } from '@/hooks/useGrouping';
 import type {
   Issue,
   ProcessingStatus,
@@ -20,6 +21,7 @@ import type {
   SortField,
   Severity,
   IssueStatus,
+  GroupBy,
 } from '@/lib/types';
 
 // ============================================================================
@@ -81,6 +83,18 @@ interface AppContextType {
   filterIssues: (issues: Issue[]) => Issue[];
   hasActiveFilters: boolean;
   activeFilterCount: number;
+
+  // Grouping state (from useGrouping)
+  groupBy: GroupBy;
+  setGroupBy: (groupBy: GroupBy) => void;
+  cycleGroupBy: () => void;
+  collapsedGroups: Set<string>;
+  toggleGroup: (key: string) => void;
+  collapseAllGroups: (groups: GroupedIssues[]) => void;
+  expandAllGroups: () => void;
+  isGroupCollapsed: (key: string) => boolean;
+  groupedIssues: GroupedIssues[];
+  collapsedCount: number;
 }
 
 const defaultProcessingStatus: ProcessingStatus = {
@@ -154,6 +168,19 @@ export function AppProvider({ children }: AppProviderProps) {
     activeFilterCount,
   } = useFilters({ syncUrl: true });
 
+  const {
+    groupBy,
+    setGroupBy,
+    cycleGroupBy,
+    collapsedGroups,
+    toggleGroup,
+    collapseAll,
+    expandAll,
+    isCollapsed,
+    groupIssues,
+    collapsedCount,
+  } = useGrouping();
+
   // Derived state: available providers from issues
   const availableProviders = useMemo(
     () => [...new Set(issues.map((i) => i.provider))],
@@ -168,6 +195,12 @@ export function AppProvider({ children }: AppProviderProps) {
     result = sortIssues(result);
     return result;
   }, [issues, filterIssues, searchIssues, sortIssues]);
+
+  // Derived state: grouped issues
+  const groupedIssues = useMemo(
+    () => groupIssues(processedIssues),
+    [processedIssues, groupIssues]
+  );
 
   // Fetch issues from API
   const fetchIssues = useCallback(async () => {
@@ -343,6 +376,18 @@ export function AppProvider({ children }: AppProviderProps) {
     filterIssues,
     hasActiveFilters,
     activeFilterCount,
+
+    // Grouping state
+    groupBy,
+    setGroupBy,
+    cycleGroupBy,
+    collapsedGroups,
+    toggleGroup,
+    collapseAllGroups: collapseAll,
+    expandAllGroups: expandAll,
+    isGroupCollapsed: isCollapsed,
+    groupedIssues,
+    collapsedCount,
   }), [
     issues,
     processedIssues,
@@ -384,6 +429,16 @@ export function AppProvider({ children }: AppProviderProps) {
     filterIssues,
     hasActiveFilters,
     activeFilterCount,
+    groupBy,
+    setGroupBy,
+    cycleGroupBy,
+    collapsedGroups,
+    toggleGroup,
+    collapseAll,
+    expandAll,
+    isCollapsed,
+    groupedIssues,
+    collapsedCount,
   ]);
 
   return (
@@ -515,6 +570,36 @@ export function useAppFilters() {
     filterIssues,
     hasActiveFilters,
     activeFilterCount,
+  };
+}
+
+/**
+ * Hook for accessing only grouping state.
+ */
+export function useAppGrouping() {
+  const {
+    groupBy,
+    setGroupBy,
+    cycleGroupBy,
+    collapsedGroups,
+    toggleGroup,
+    collapseAllGroups,
+    expandAllGroups,
+    isGroupCollapsed,
+    groupedIssues,
+    collapsedCount,
+  } = useApp();
+  return {
+    groupBy,
+    setGroupBy,
+    cycleGroupBy,
+    collapsedGroups,
+    toggleGroup,
+    collapseAllGroups,
+    expandAllGroups,
+    isGroupCollapsed,
+    groupedIssues,
+    collapsedCount,
   };
 }
 

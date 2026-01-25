@@ -47,6 +47,11 @@ export function KeyboardShortcuts({
     fetchIssues,
     filters,
     setFilters,
+    // Grouping
+    groupedIssues,
+    collapseAllGroups,
+    expandAllGroups,
+    cycleGroupBy,
   } = useApp();
 
   // Focused index for navigation
@@ -133,6 +138,21 @@ export function KeyboardShortcuts({
     }
   }, [onSeverityFilter, filters.severities, setFilters]);
 
+  // Collapse all groups
+  const handleCollapseAll = useCallback(() => {
+    collapseAllGroups(groupedIssues);
+  }, [collapseAllGroups, groupedIssues]);
+
+  // Expand all groups
+  const handleExpandAll = useCallback(() => {
+    expandAllGroups();
+  }, [expandAllGroups]);
+
+  // Cycle group by
+  const handleCycleGroupBy = useCallback(() => {
+    cycleGroupBy();
+  }, [cycleGroupBy]);
+
   // Use the keyboard shortcuts hook
   useKeyboardShortcuts({
     onNavigateDown: handleNavigateDown,
@@ -147,6 +167,9 @@ export function KeyboardShortcuts({
     onShowHelp: handleShowHelp,
     onToggleFilters: onToggleFilters,
     onRefresh: fetchIssues,
+    onCollapseAll: handleCollapseAll,
+    onExpandAll: handleExpandAll,
+    onCycleGroupBy: handleCycleGroupBy,
     onFilterBySeverity: handleSeverityFilter,
     enabled: !showHelp, // Disable shortcuts when help modal is open
   });

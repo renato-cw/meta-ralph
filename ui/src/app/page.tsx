@@ -9,8 +9,9 @@ import { FilterBar } from '@/components/filters/FilterBar';
 import { BulkActionBar } from '@/components/actions/BulkActionBar';
 import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
 import { KeyboardShortcuts } from '@/components/common';
+import { GroupedView, ViewToggle } from '@/components/views';
 import { useApp } from '@/contexts';
-import type { SortField } from '@/lib/types';
+import type { SortField, GroupBy } from '@/lib/types';
 
 export default function Home() {
   const {
@@ -65,6 +66,16 @@ export default function Home() {
     setPriorityRange,
     hasActiveFilters,
     activeFilterCount,
+
+    // Grouping state
+    groupBy,
+    setGroupBy,
+    groupedIssues,
+    collapsedGroups,
+    toggleGroup,
+    collapseAllGroups,
+    expandAllGroups,
+    collapsedCount,
   } = useApp();
 
   // Refs for keyboard navigation
@@ -85,6 +96,14 @@ export default function Home() {
   const handleToggleFilters = useCallback(() => {
     setFiltersExpanded((prev) => !prev);
   }, []);
+
+  const handleGroupByChange = useCallback((newGroupBy: GroupBy) => {
+    setGroupBy(newGroupBy);
+  }, [setGroupBy]);
+
+  const handleCollapseAll = useCallback(() => {
+    collapseAllGroups(groupedIssues);
+  }, [collapseAllGroups, groupedIssues]);
 
   return (
     <div>
@@ -167,26 +186,60 @@ export default function Home() {
         />
       </div>
 
-      {/* Results count */}
-      {(hasActiveFilters || searchQuery) && (
-        <div className="mb-4 text-sm text-[var(--muted)]">
-          Showing {processedIssues.length} of {issues.length} issues
-          {searchQuery && ` matching "${searchQuery}"`}
-        </div>
-      )}
-
-      <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4 mb-20">
-        <IssueTable
-          issues={processedIssues}
-          selectedIds={selectedIds}
-          onToggle={handleToggle}
-          onSelectAll={handleSelectAll}
-          onDeselectAll={handleDeselectAll}
-          loading={loading}
-          sort={sort}
-          onSort={handleSort}
-          onRowClick={openDetailPanel}
+      {/* Results count and view toggle */}
+      <div className="flex items-center justify-between mb-4">
+        {(hasActiveFilters || searchQuery) ? (
+          <div className="text-sm text-[var(--muted)]">
+            Showing {processedIssues.length} of {issues.length} issues
+            {searchQuery && ` matching "${searchQuery}"`}
+          </div>
+        ) : (
+          <div className="text-sm text-[var(--muted)]">
+            {processedIssues.length} issues
+          </div>
+        )}
+        <ViewToggle
+          groupBy={groupBy}
+          onGroupByChange={handleGroupByChange}
+          hasCollapsedGroups={collapsedCount > 0}
+          onCollapseAll={handleCollapseAll}
+          onExpandAll={expandAllGroups}
+          groupCount={groupedIssues.length}
+          collapsedCount={collapsedCount}
         />
+      </div>
+
+      <div className="mb-20">
+        {groupBy ? (
+          /* Grouped view with collapsible sections */
+          <GroupedView
+            groups={groupedIssues}
+            groupBy={groupBy}
+            selectedIds={selectedIds}
+            onToggle={handleToggle}
+            onRowClick={openDetailPanel}
+            collapsedGroups={collapsedGroups}
+            onToggleGroup={toggleGroup}
+            sort={sort}
+            onSort={handleSort}
+            loading={loading}
+          />
+        ) : (
+          /* Flat table view */
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
+            <IssueTable
+              issues={processedIssues}
+              selectedIds={selectedIds}
+              onToggle={handleToggle}
+              onSelectAll={handleSelectAll}
+              onDeselectAll={handleDeselectAll}
+              loading={loading}
+              sort={sort}
+              onSort={handleSort}
+              onRowClick={openDetailPanel}
+            />
+          </div>
+        )}
       </div>
 
       <LogViewer

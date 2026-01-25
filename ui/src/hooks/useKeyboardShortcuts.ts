@@ -25,6 +25,11 @@ export interface KeyboardShortcutsOptions {
   onToggleFilters?: () => void;
   onRefresh?: () => void;
 
+  // Grouping
+  onCollapseAll?: () => void;
+  onExpandAll?: () => void;
+  onCycleGroupBy?: () => void;
+
   // Quick filters
   onFilterBySeverity?: (severity: Severity) => void;
 
@@ -58,6 +63,9 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     onShowHelp,
     onToggleFilters,
     onRefresh,
+    onCollapseAll,
+    onExpandAll,
+    onCycleGroupBy,
     onFilterBySeverity,
     enabled = true,
   } = options;
@@ -167,6 +175,25 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       return;
     }
 
+    // Grouping
+    if (matchesShortcut(event, SHORTCUTS.collapseAll)) {
+      event.preventDefault();
+      onCollapseAll?.();
+      return;
+    }
+
+    if (matchesShortcut(event, SHORTCUTS.expandAll)) {
+      event.preventDefault();
+      onExpandAll?.();
+      return;
+    }
+
+    if (matchesShortcut(event, SHORTCUTS.cycleGroupBy)) {
+      event.preventDefault();
+      onCycleGroupBy?.();
+      return;
+    }
+
     // Quick filters
     if (onFilterBySeverity) {
       if (matchesShortcut(event, SHORTCUTS.filterCritical)) {
@@ -208,6 +235,9 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     onShowHelp,
     onToggleFilters,
     onRefresh,
+    onCollapseAll,
+    onExpandAll,
+    onCycleGroupBy,
     onFilterBySeverity,
   ]);
 
