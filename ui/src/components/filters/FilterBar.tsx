@@ -76,6 +76,8 @@ export function FilterBar({
       {/* Filter bar header - always visible */}
       <div className="flex items-center justify-between px-4 py-3">
         <button
+          data-testid="filter-toggle"
+          aria-expanded={isExpanded}
           onClick={handleToggleExpanded}
           className="flex items-center gap-2 text-sm hover:text-[var(--primary)] transition-colors"
         >
@@ -120,6 +122,7 @@ export function FilterBar({
           )}
           {hasActiveFilters && (
             <button
+              data-testid="clear-filters"
               onClick={onClearFilters}
               className="text-xs text-[var(--muted)] hover:text-[var(--danger)] transition-colors"
             >
@@ -180,6 +183,7 @@ export function FilterBar({
                 {availableProviders.map((provider) => (
                   <button
                     key={provider}
+                    data-testid={`filter-provider-${provider.toLowerCase()}`}
                     onClick={() => onToggleProvider(provider)}
                     className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
                       filters.providers.includes(provider)
@@ -201,6 +205,7 @@ export function FilterBar({
               {SEVERITIES.map((severity) => (
                 <button
                   key={severity}
+                  data-testid={`filter-severity-${severity.toLowerCase()}`}
                   onClick={() => onToggleSeverity(severity)}
                   className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
                     filters.severities.includes(severity)

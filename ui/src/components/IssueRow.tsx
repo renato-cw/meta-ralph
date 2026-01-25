@@ -41,6 +41,7 @@ export function IssueRow({
 
   return (
     <tr
+      data-testid={`issue-row-${issue.id}`}
       className={`border-b border-[var(--border)] hover:bg-[var(--card)] cursor-pointer transition-colors ${
         selected ? 'bg-[var(--card)]' : ''
       }`}
@@ -49,6 +50,7 @@ export function IssueRow({
       <td className="p-3">
         <input
           type="checkbox"
+          data-testid={`issue-checkbox-${issue.id}`}
           checked={selected}
           onChange={() => onToggle(issue.id)}
           onClick={(e) => e.stopPropagation()}

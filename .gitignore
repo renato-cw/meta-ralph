@@ -18,3 +18,8 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Playwright
+ui/playwright-report/
+ui/test-results/
+ui/.playwright/

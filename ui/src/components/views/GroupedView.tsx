@@ -170,7 +170,7 @@ export function GroupedView({
   }
 
   return (
-    <div className="space-y-4">
+    <div data-testid="grouped-view" className="space-y-4">
       {groups.map((group, groupIndex) => {
         const collapsed = isCollapsed(group.key);
         const selectedCount = groupSelectedCounts.get(group.key) || 0;

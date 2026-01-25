@@ -38,6 +38,7 @@ export function BulkActionBar({
   return (
     <>
       <div
+        data-testid="bulk-action-bar"
         className={`fixed bottom-0 left-0 right-0 bg-[var(--card)] border-t border-[var(--border)] px-6 py-3 shadow-lg z-40 ${className}`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -55,6 +56,7 @@ export function BulkActionBar({
               </button>
             )}
             <button
+              data-testid="clear-selection"
               onClick={onClearSelection}
               className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
             >
@@ -82,6 +84,7 @@ export function BulkActionBar({
 
             {/* Process button */}
             <button
+              data-testid="bulk-process-button"
               onClick={onProcess}
               disabled={isProcessing}
               className="px-4 py-2 text-sm bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"

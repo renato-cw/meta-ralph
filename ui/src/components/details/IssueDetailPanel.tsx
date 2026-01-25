@@ -82,6 +82,7 @@ export function IssueDetailPanel({
 
       {/* Panel */}
       <div
+        data-testid="issue-detail-panel"
         className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-[var(--card)] border-l border-[var(--border)] shadow-xl z-50 overflow-y-auto animate-slide-in-right"
         role="dialog"
         aria-modal="true"
@@ -107,6 +108,7 @@ export function IssueDetailPanel({
               </p>
             </div>
             <button
+              data-testid="detail-close"
               onClick={onClose}
               className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)] rounded-lg transition-colors"
               aria-label="Close panel"

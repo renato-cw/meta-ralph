@@ -180,6 +180,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(function S
           <input
             ref={inputRef}
             type="text"
+            data-testid="search-input"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -194,6 +195,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(function S
             {value && (
               <button
                 type="button"
+                data-testid="search-clear"
                 onClick={() => {
                   onClear?.();
                   inputRef.current?.focus();
