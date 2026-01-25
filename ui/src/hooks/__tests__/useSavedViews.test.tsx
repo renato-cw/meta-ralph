@@ -231,7 +231,7 @@ describe('useSavedViews', () => {
       expect(result.current.views[0].name).toBe('Updated Name');
     });
 
-    it('should update the updatedAt timestamp', () => {
+    it('should update the updatedAt timestamp', async () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
       let viewId = '';
@@ -242,8 +242,8 @@ describe('useSavedViews', () => {
         originalUpdatedAt = view.updatedAt;
       });
 
-      // Wait a bit to ensure different timestamp
-      jest.advanceTimersByTime(1000);
+      // Wait a small amount of real time to ensure different timestamp
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       act(() => {
         result.current.updateView(viewId, { name: 'New Name' });
