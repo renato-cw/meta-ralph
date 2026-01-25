@@ -9,3 +9,4 @@ export { useSearch, type SearchScope } from './useSearch';
 export { useFilters } from './useFilters';
 export { useKeyboardShortcuts, type KeyboardShortcutsOptions } from './useKeyboardShortcuts';
 export { useGrouping, type GroupedIssues } from './useGrouping';
+export { useVirtualList, usePageSize, PAGE_SIZES, type PageSize } from './useVirtualList';
