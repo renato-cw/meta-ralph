@@ -34,10 +34,12 @@ describe('useHistory', () => {
     title: 'Test Issue',
     description: 'Test description',
     severity: 'HIGH',
+    raw_severity: 'high',
     priority: 75,
     count: 5,
     location: 'src/test.ts:10',
-    external_url: 'https://example.com/issue/1',
+    permalink: 'https://example.com/issue/1',
+    metadata: {},
   };
 
   beforeEach(() => {
