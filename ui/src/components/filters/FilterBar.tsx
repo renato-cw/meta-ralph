@@ -19,6 +19,10 @@ interface FilterBarProps {
   onPriorityRangeChange: (min: number, max: number) => void;
   hasActiveFilters: boolean;
   activeFilterCount: number;
+  /** Controlled expanded state (optional) */
+  expanded?: boolean;
+  /** Callback when expand state changes (optional, for controlled mode) */
+  onToggleExpanded?: () => void;
   className?: string;
 }
 
@@ -57,16 +61,22 @@ export function FilterBar({
   onPriorityRangeChange,
   hasActiveFilters,
   activeFilterCount,
+  expanded,
+  onToggleExpanded,
   className = '',
 }: FilterBarProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(false);
+
+  // Support both controlled and uncontrolled modes
+  const isExpanded = expanded !== undefined ? expanded : internalExpanded;
+  const handleToggleExpanded = onToggleExpanded || (() => setInternalExpanded((prev) => !prev));
 
   return (
     <div className={`border border-[var(--border)] rounded-lg bg-[var(--card)] ${className}`}>
       {/* Filter bar header - always visible */}
       <div className="flex items-center justify-between px-4 py-3">
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={handleToggleExpanded}
           className="flex items-center gap-2 text-sm hover:text-[var(--primary)] transition-colors"
         >
           <svg

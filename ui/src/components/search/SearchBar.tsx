@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent, forwardRef, useImperativeHandle } from 'react';
 import type { SearchScope } from '@/hooks/useSearch';
 
 interface SearchBarProps {
@@ -29,7 +29,7 @@ const SCOPE_OPTIONS: { value: SearchScope; label: string }[] = [
  * SearchBar component with scope selector, history dropdown, and keyboard shortcuts.
  * Press `/` anywhere to focus the search bar.
  */
-export function SearchBar({
+export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(function SearchBar({
   value,
   onChange,
   onSubmit,
@@ -41,8 +41,11 @@ export function SearchBar({
   onRemoveHistory,
   placeholder = 'Search issues...',
   className = '',
-}: SearchBarProps) {
+}, ref) {
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Expose the input ref to parent components
+  useImperativeHandle(ref, () => inputRef.current!, []);
   const [showHistory, setShowHistory] = useState(false);
   const [showScopeMenu, setShowScopeMenu] = useState(false);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -246,4 +249,4 @@ export function SearchBar({
       )}
     </div>
   );
-}
+});

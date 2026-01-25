@@ -1,0 +1,198 @@
+'use client';
+
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useApp } from '@/contexts';
+import { ShortcutsModal } from './ShortcutsModal';
+import type { Issue, Severity } from '@/lib/types';
+
+interface KeyboardShortcutsProps {
+  /** Reference to the search input element for focus */
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  /** Callback when filter bar toggle is requested */
+  onToggleFilters?: () => void;
+  /** Callback for severity quick-filter toggle */
+  onSeverityFilter?: (severity: Severity) => void;
+}
+
+/**
+ * Keyboard shortcuts handler component.
+ *
+ * This component should be rendered once at the page level.
+ * It handles all keyboard shortcuts and coordinates with the AppContext.
+ *
+ * @example
+ * <KeyboardShortcuts
+ *   searchInputRef={searchRef}
+ *   onToggleFilters={() => setFiltersExpanded(prev => !prev)}
+ * />
+ */
+export function KeyboardShortcuts({
+  searchInputRef,
+  onToggleFilters,
+  onSeverityFilter,
+}: KeyboardShortcutsProps) {
+  const {
+    processedIssues,
+    selectedIds,
+    handleToggle,
+    handleSelectAll,
+    handleDeselectAll,
+    detailIssue,
+    isDetailOpen,
+    openDetailPanel,
+    closeDetailPanel,
+    processing,
+    processIssues,
+    fetchIssues,
+    filters,
+    setFilters,
+  } = useApp();
+
+  // Focused index for navigation
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Get the currently focused issue
+  const focusedIssue: Issue | null = focusedIndex >= 0 && focusedIndex < processedIssues.length
+    ? processedIssues[focusedIndex]
+    : null;
+
+  // Navigation handlers
+  const handleNavigateDown = useCallback(() => {
+    setFocusedIndex((prev) => {
+      const next = prev + 1;
+      if (next >= processedIssues.length) return prev;
+      return next;
+    });
+  }, [processedIssues.length]);
+
+  const handleNavigateUp = useCallback(() => {
+    setFocusedIndex((prev) => {
+      if (prev <= 0) return 0;
+      return prev - 1;
+    });
+  }, []);
+
+  // Selection handlers
+  const handleToggleSelection = useCallback(() => {
+    if (focusedIssue) {
+      handleToggle(focusedIssue.id);
+    }
+  }, [focusedIssue, handleToggle]);
+
+  // Detail panel handlers
+  const handleToggleDetailPanel = useCallback(() => {
+    if (isDetailOpen) {
+      closeDetailPanel();
+    } else if (focusedIssue) {
+      openDetailPanel(focusedIssue);
+    }
+  }, [isDetailOpen, focusedIssue, openDetailPanel, closeDetailPanel]);
+
+  // Escape handler
+  const handleEscape = useCallback(() => {
+    if (isDetailOpen) {
+      closeDetailPanel();
+    } else if (selectedIds.size > 0) {
+      handleDeselectAll();
+    }
+  }, [isDetailOpen, closeDetailPanel, selectedIds.size, handleDeselectAll]);
+
+  // Process selected issues
+  const handleProcessSelected = useCallback(() => {
+    if (selectedIds.size > 0 && !processing.isProcessing) {
+      processIssues(Array.from(selectedIds));
+    }
+  }, [selectedIds, processing.isProcessing, processIssues]);
+
+  // Focus search
+  const handleFocusSearch = useCallback(() => {
+    searchInputRef?.current?.focus();
+  }, [searchInputRef]);
+
+  // Show help modal
+  const handleShowHelp = useCallback(() => {
+    setShowHelp(true);
+  }, []);
+
+  // Severity quick filter
+  const handleSeverityFilter = useCallback((severity: Severity) => {
+    if (onSeverityFilter) {
+      onSeverityFilter(severity);
+    } else {
+      // Default behavior: toggle the severity filter
+      const currentSeverities = filters.severities;
+      if (currentSeverities.includes(severity)) {
+        // If already filtered to this severity, clear it
+        setFilters({ severities: [] });
+      } else {
+        // Set filter to only this severity
+        setFilters({ severities: [severity] });
+      }
+    }
+  }, [onSeverityFilter, filters.severities, setFilters]);
+
+  // Use the keyboard shortcuts hook
+  useKeyboardShortcuts({
+    onNavigateDown: handleNavigateDown,
+    onNavigateUp: handleNavigateUp,
+    onToggleSelection: handleToggleSelection,
+    onSelectAll: handleSelectAll,
+    onDeselectAll: handleDeselectAll,
+    onToggleDetailPanel: handleToggleDetailPanel,
+    onProcessSelected: handleProcessSelected,
+    onEscape: handleEscape,
+    onFocusSearch: handleFocusSearch,
+    onShowHelp: handleShowHelp,
+    onToggleFilters: onToggleFilters,
+    onRefresh: fetchIssues,
+    onFilterBySeverity: handleSeverityFilter,
+    enabled: !showHelp, // Disable shortcuts when help modal is open
+  });
+
+  // Update detail panel when navigating with keyboard
+  useEffect(() => {
+    if (isDetailOpen && focusedIssue && detailIssue?.id !== focusedIssue.id) {
+      openDetailPanel(focusedIssue);
+    }
+  }, [focusedIndex, focusedIssue, isDetailOpen, detailIssue, openDetailPanel]);
+
+  // Reset focused index when issues change
+  useEffect(() => {
+    setFocusedIndex(-1);
+  }, [processedIssues.length]);
+
+  // Scroll focused row into view
+  useEffect(() => {
+    if (focusedIndex >= 0) {
+      const row = document.querySelector(`[data-issue-index="${focusedIndex}"]`);
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [focusedIndex]);
+
+  return (
+    <>
+      <ShortcutsModal
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+      />
+      {/* Visual indicator for focused row - expose via context or CSS class */}
+      <style>{`
+        [data-issue-index="${focusedIndex}"] {
+          outline: 2px solid var(--accent, #3b82f6);
+          outline-offset: -2px;
+        }
+      `}</style>
+    </>
+  );
+}
+
+/**
+ * Hook to get the current focused index.
+ * Components can use this to highlight the focused row.
+ */
+export function useFocusedIndex() {
+  // This would be better with a context, but for now we use CSS
+  return -1;
+}

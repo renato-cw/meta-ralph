@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { IssueTable } from '@/components/IssueTable';
 import { ProcessButton } from '@/components/ProcessButton';
 import { LogViewer } from '@/components/LogViewer';
@@ -8,6 +8,7 @@ import { SearchBar } from '@/components/search/SearchBar';
 import { FilterBar } from '@/components/filters/FilterBar';
 import { BulkActionBar } from '@/components/actions/BulkActionBar';
 import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
+import { KeyboardShortcuts } from '@/components/common';
 import { useApp } from '@/contexts';
 import type { SortField } from '@/lib/types';
 
@@ -66,6 +67,12 @@ export default function Home() {
     activeFilterCount,
   } = useApp();
 
+  // Refs for keyboard navigation
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Filter bar expanded state
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+
   const handleSort = useCallback((field: SortField) => {
     toggleSort(field);
   }, [toggleSort]);
@@ -75,13 +82,26 @@ export default function Home() {
     await processIssues(Array.from(selectedIds));
   }, [selectedIds, processIssues]);
 
+  const handleToggleFilters = useCallback(() => {
+    setFiltersExpanded((prev) => !prev);
+  }, []);
+
   return (
     <div>
+      {/* Keyboard shortcuts handler */}
+      <KeyboardShortcuts
+        searchInputRef={searchInputRef}
+        onToggleFilters={handleToggleFilters}
+      />
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">Issue Queue</h2>
           <p className="text-[var(--muted)] text-sm mt-1">
             Select issues to process with Claude Code
+            <span className="ml-2 text-xs opacity-60">
+              (Press <kbd className="px-1 py-0.5 text-xs font-mono bg-[var(--background)] border border-[var(--border)] rounded">?</kbd> for shortcuts)
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -115,6 +135,7 @@ export default function Home() {
       {/* Search bar */}
       <div className="mb-4">
         <SearchBar
+          ref={searchInputRef}
           value={searchQuery}
           onChange={setSearchQuery}
           onSubmit={submitSearch}
@@ -124,7 +145,7 @@ export default function Home() {
           history={searchHistory}
           onSelectHistory={selectFromHistory}
           onRemoveHistory={removeFromHistory}
-          placeholder="Search issues by title, description, location, or ID..."
+          placeholder="Search issues by title, description, location, or ID... (Press / to focus)"
         />
       </div>
 
@@ -141,6 +162,8 @@ export default function Home() {
           onPriorityRangeChange={setPriorityRange}
           hasActiveFilters={hasActiveFilters}
           activeFilterCount={activeFilterCount}
+          expanded={filtersExpanded}
+          onToggleExpanded={handleToggleFilters}
         />
       </div>
 
