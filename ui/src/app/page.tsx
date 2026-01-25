@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { IssueTable } from '@/components/IssueTable';
 import { ProcessButton } from '@/components/ProcessButton';
 import { LogViewer } from '@/components/LogViewer';
@@ -12,9 +12,10 @@ import { KeyboardShortcuts } from '@/components/common';
 import { GroupedView, ViewToggle, SavedViews, SaveViewDialog } from '@/components/views';
 import { Dashboard } from '@/components/dashboard';
 import { ProcessingQueue } from '@/components/queue';
-import { useSavedViews } from '@/hooks';
+import { HistoryView } from '@/components/history';
+import { useSavedViews, useHistory } from '@/hooks';
 import { useApp } from '@/contexts';
-import type { SortField, GroupBy, SavedView } from '@/lib/types';
+import type { SortField, GroupBy, SavedView, HistoryEntry } from '@/lib/types';
 
 export default function Home() {
   const {
@@ -94,6 +95,24 @@ export default function Home() {
   // Save view dialog state
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
 
+  // History panel state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // History hook
+  const {
+    entries: historyEntries,
+    filteredEntries: filteredHistoryEntries,
+    filter: historyFilter,
+    setFilter: setHistoryFilter,
+    clearFilter: clearHistoryFilter,
+    recordCompletion,
+    recordFailure,
+    removeEntry: removeHistoryEntry,
+    clearHistory,
+    clearFailed: clearFailedHistory,
+    stats: historyStats,
+  } = useHistory();
+
   // Saved views hook
   const handleLoadView = useCallback((view: SavedView) => {
     setFilters(view.filters);
@@ -164,7 +183,60 @@ export default function Home() {
     saveView(name);
   }, [saveView]);
 
+  const handleToggleHistory = useCallback(() => {
+    setIsHistoryOpen(prev => !prev);
+  }, []);
+
+  const handleCloseHistory = useCallback(() => {
+    setIsHistoryOpen(false);
+  }, []);
+
+  const handleRetryFromHistory = useCallback(async (entry: HistoryEntry) => {
+    // Find the issue and retry it
+    const issue = issues.find(i => i.id === entry.issueId);
+    if (issue) {
+      setQueuedIds(prev => [...prev, issue.id]);
+      setIsQueueOpen(true);
+      await processIssues([issue.id]);
+    }
+  }, [issues, processIssues]);
+
+  const handleRemoveFromHistory = useCallback((entry: HistoryEntry) => {
+    removeHistoryEntry(entry.id);
+  }, [removeHistoryEntry]);
+
   const hasUnsavedChanges = activeView ? !matchesView(activeView.id) : false;
+
+  // Track processing completed/failed IDs to record history
+  const previousCompletedRef = useRef<Set<string>>(new Set());
+  const previousFailedRef = useRef<Set<string>>(new Set());
+
+  // Record history when processing completes or fails
+  useEffect(() => {
+    // Check for newly completed
+    const currentCompleted = new Set(processing.completed);
+    for (const id of currentCompleted) {
+      if (!previousCompletedRef.current.has(id)) {
+        const issue = issues.find(i => i.id === id);
+        if (issue) {
+          recordCompletion(issue);
+        }
+      }
+    }
+    previousCompletedRef.current = currentCompleted;
+
+    // Check for newly failed
+    const currentFailed = new Set(processing.failed);
+    for (const id of currentFailed) {
+      if (!previousFailedRef.current.has(id)) {
+        const issue = issues.find(i => i.id === id);
+        if (issue) {
+          recordFailure(issue, 'Processing failed');
+        }
+      }
+    }
+    previousFailedRef.current = currentFailed;
+  }, [processing.completed, processing.failed, issues, recordCompletion, recordFailure]);
 
   return (
     <div>
@@ -186,6 +258,21 @@ export default function Home() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleToggleHistory}
+            className="px-4 py-2 text-sm border border-[var(--border)] rounded hover:bg-[var(--card)] transition-colors flex items-center gap-2"
+            title="View processing history"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            History
+            {historyStats.total > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--primary)] text-white">
+                {historyStats.total}
+              </span>
+            )}
+          </button>
           <button
             onClick={fetchIssues}
             disabled={loading}
@@ -368,6 +455,23 @@ export default function Home() {
         currentFilters={filters}
         currentSort={sort}
         currentGroupBy={groupBy}
+      />
+
+      {/* History panel */}
+      <HistoryView
+        isOpen={isHistoryOpen}
+        onClose={handleCloseHistory}
+        entries={historyEntries}
+        filteredEntries={filteredHistoryEntries}
+        filter={historyFilter}
+        onFilterChange={setHistoryFilter}
+        onClearFilter={clearHistoryFilter}
+        onRetry={handleRetryFromHistory}
+        onRemove={handleRemoveFromHistory}
+        onClearHistory={clearHistory}
+        onClearFailed={clearFailedHistory}
+        stats={historyStats}
+        availableProviders={availableProviders}
       />
     </div>
   );

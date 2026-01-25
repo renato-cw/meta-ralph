@@ -184,6 +184,40 @@ export const TAG_COLORS = [
 ] as const;
 
 // ============================================================================
+// History Types
+// ============================================================================
+
+/**
+ * A processing history entry with complete metadata.
+ */
+export interface HistoryEntry {
+  id: string;
+  issueId: string;
+  issueTitle: string;
+  provider: string;
+  severity: Severity;
+  status: 'completed' | 'failed';
+  startedAt: string;
+  completedAt: string;
+  duration: number; // milliseconds
+  prUrl?: string;
+  error?: string;
+}
+
+/**
+ * A processing session grouping multiple history entries.
+ */
+export interface HistorySession {
+  id: string;
+  startedAt: string;
+  completedAt?: string;
+  entries: HistoryEntry[];
+  totalCount: number;
+  completedCount: number;
+  failedCount: number;
+}
+
+// ============================================================================
 // Dashboard Types
 // ============================================================================
 
