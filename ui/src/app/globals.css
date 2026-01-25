@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --success: #22c55e;
+  --warning: #eab308;
+  --danger: #ef4444;
+  --muted: #6b7280;
+  --border: #27272a;
+  --card: #18181b;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Severity badges */
+.badge-critical {
+  background-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.badge-high {
+  background-color: #7c2d12;
+  color: #fed7aa;
+}
+
+.badge-medium {
+  background-color: #713f12;
+  color: #fef08a;
+}
+
+.badge-low {
+  background-color: #14532d;
+  color: #bbf7d0;
+}
+
+.badge-info {
+  background-color: #1e3a5f;
+  color: #bfdbfe;
+}
