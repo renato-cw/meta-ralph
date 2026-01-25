@@ -10,6 +10,7 @@ import { BulkActionBar } from '@/components/actions/BulkActionBar';
 import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
 import { KeyboardShortcuts } from '@/components/common';
 import { GroupedView, ViewToggle } from '@/components/views';
+import { Dashboard } from '@/components/dashboard';
 import { useApp } from '@/contexts';
 import type { SortField, GroupBy } from '@/lib/types';
 
@@ -150,6 +151,14 @@ export default function Home() {
           </button>
         </div>
       )}
+
+      {/* Dashboard with statistics */}
+      <Dashboard
+        issues={issues}
+        completedCount={processing.completed.length}
+        failedCount={processing.failed.length}
+        loading={loading}
+      />
 
       {/* Search bar */}
       <div className="mb-4">
