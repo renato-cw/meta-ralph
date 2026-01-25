@@ -131,7 +131,7 @@ describe('useSavedViews', () => {
     it('should delete a view by id', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('To Delete');
         viewId = view.id;
@@ -149,7 +149,7 @@ describe('useSavedViews', () => {
     it('should clear active view if deleting active view', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('Active View');
         viewId = view.id;
@@ -175,7 +175,7 @@ describe('useSavedViews', () => {
         })
       );
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('My View');
         viewId = view.id;
@@ -197,7 +197,7 @@ describe('useSavedViews', () => {
     it('should set the view as active', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('My View');
         viewId = view.id;
@@ -218,7 +218,7 @@ describe('useSavedViews', () => {
     it('should update view properties', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('Original Name');
         viewId = view.id;
@@ -234,8 +234,8 @@ describe('useSavedViews', () => {
     it('should update the updatedAt timestamp', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
-      let originalUpdatedAt: string;
+      let viewId = '';
+      let originalUpdatedAt = '';
       act(() => {
         const view = result.current.saveView('My View');
         viewId = view.id;
@@ -257,7 +257,7 @@ describe('useSavedViews', () => {
     it('should set a view as default', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('My View');
         viewId = view.id;
@@ -299,7 +299,7 @@ describe('useSavedViews', () => {
     it('should unset default when passing null', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('My View');
         viewId = view.id;
@@ -324,7 +324,7 @@ describe('useSavedViews', () => {
     it('should rename a view', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('Old Name');
         viewId = view.id;
@@ -342,7 +342,7 @@ describe('useSavedViews', () => {
     it('should create a copy of a view', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('Original');
         viewId = view.id;
@@ -375,7 +375,7 @@ describe('useSavedViews', () => {
     it('should return true when current state matches view', () => {
       const { result } = renderHook(() => useSavedViews(defaultOptions));
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('My View');
         viewId = view.id;
@@ -390,7 +390,7 @@ describe('useSavedViews', () => {
         { initialProps: defaultOptions }
       );
 
-      let viewId: string;
+      let viewId = '';
       act(() => {
         const view = result.current.saveView('My View');
         viewId = view.id;
@@ -450,7 +450,7 @@ describe('useSavedViews', () => {
         },
       ];
 
-      let count: number;
+      let count = 0;
       act(() => {
         count = result.current.importViews(JSON.stringify(viewsToImport));
       });
