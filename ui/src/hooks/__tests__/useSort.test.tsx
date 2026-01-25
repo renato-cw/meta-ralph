@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { useSort } from '../useSort';
-import type { Issue, Severity } from '@/lib/types';
+import type { Issue } from '@/lib/types';
 import { DEFAULT_SORT_STATE } from '@/lib/types';
 
 // Mock localStorage
