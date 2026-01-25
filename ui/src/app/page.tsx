@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { IssueTable } from '@/components/IssueTable';
 import { ProcessButton } from '@/components/ProcessButton';
 import { LogViewer } from '@/components/LogViewer';
@@ -8,41 +8,53 @@ import { SearchBar } from '@/components/search/SearchBar';
 import { FilterBar } from '@/components/filters/FilterBar';
 import { BulkActionBar } from '@/components/actions/BulkActionBar';
 import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
-import { useSort } from '@/hooks/useSort';
-import { useSearch } from '@/hooks/useSearch';
-import { useFilters } from '@/hooks/useFilters';
-import type { Issue, ProcessingStatus, SortField } from '@/lib/types';
+import { useApp } from '@/contexts';
+import type { SortField } from '@/lib/types';
 
 export default function Home() {
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [detailIssue, setDetailIssue] = useState<Issue | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [processing, setProcessing] = useState<ProcessingStatus>({
-    isProcessing: false,
-    currentIssueId: null,
-    logs: [],
-    completed: [],
-    failed: [],
-  });
-
-  // Use custom hooks for sort, search, and filters
-  const { sort, toggleSort, sortIssues } = useSort();
   const {
-    query: searchQuery,
-    setQuery: setSearchQuery,
-    clearQuery: clearSearchQuery,
-    searchIssues,
+    // Issues data
+    issues,
+    processedIssues,
+    loading,
+    error,
+    setError,
+    fetchIssues,
+    availableProviders,
+
+    // Selection state
+    selectedIds,
+    handleToggle,
+    handleSelectAll,
+    handleDeselectAll,
+
+    // Detail panel state
+    detailIssue,
+    isDetailOpen,
+    openDetailPanel,
+    closeDetailPanel,
+
+    // Processing state
+    processing,
+    processIssues,
+    processSingleIssue,
+
+    // Sort state
+    sort,
+    toggleSort,
+
+    // Search state
+    searchQuery,
+    setSearchQuery,
+    clearSearchQuery,
     submitSearch,
-    history: searchHistory,
+    searchScope,
+    setSearchScope,
+    searchHistory,
     selectFromHistory,
     removeFromHistory,
-    scope: searchScope,
-    setScope: setSearchScope,
-  } = useSearch();
-  const {
+
+    // Filter state
     filters,
     setFilters,
     clearFilters,
@@ -50,143 +62,18 @@ export default function Home() {
     toggleSeverity,
     toggleStatus,
     setPriorityRange,
-    filterIssues,
     hasActiveFilters,
     activeFilterCount,
-  } = useFilters({ syncUrl: true });
-
-  // Get unique providers from issues
-  const availableProviders = useMemo(
-    () => [...new Set(issues.map((i) => i.provider))],
-    [issues]
-  );
-
-  // Apply filters, search, and sort in sequence
-  const processedIssues = useMemo(() => {
-    let result = issues;
-    result = filterIssues(result);
-    result = searchIssues(result);
-    result = sortIssues(result);
-    return result;
-  }, [issues, filterIssues, searchIssues, sortIssues]);
-
-  const fetchIssues = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/issues');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch issues: ${response.statusText}`);
-      }
-      const data = await response.json();
-      setIssues(data.issues || []);
-      setProcessing(data.processing || processing);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchIssues();
-  }, [fetchIssues]);
-
-  // Poll for processing status when processing
-  useEffect(() => {
-    if (!processing.isProcessing) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch('/api/issues');
-        if (response.ok) {
-          const data = await response.json();
-          setProcessing(data.processing || processing);
-        }
-      } catch {
-        // Ignore polling errors
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [processing.isProcessing]);
-
-  const handleToggle = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const handleSelectAll = () => {
-    // Select all currently visible (filtered) issues
-    setSelectedIds(new Set(processedIssues.map((i) => i.id)));
-  };
-
-  const handleDeselectAll = () => {
-    setSelectedIds(new Set());
-  };
+  } = useApp();
 
   const handleSort = useCallback((field: SortField) => {
     toggleSort(field);
   }, [toggleSort]);
 
-  const handleRowClick = useCallback((issue: Issue) => {
-    setDetailIssue(issue);
-    setIsDetailOpen(true);
-  }, []);
-
-  const handleCloseDetail = useCallback(() => {
-    setIsDetailOpen(false);
-  }, []);
-
-  const handleProcessSingle = useCallback(async (issueId: string) => {
-    try {
-      const response = await fetch('/api/issues', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [issueId] }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to start processing');
-      }
-
-      const data = await response.json();
-      setProcessing(data.processing);
-      setIsDetailOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start processing');
-    }
-  }, []);
-
-  const handleProcess = async () => {
+  const handleProcess = useCallback(async () => {
     if (selectedIds.size === 0) return;
-
-    try {
-      const response = await fetch('/api/issues', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to start processing');
-      }
-
-      const data = await response.json();
-      setProcessing(data.processing);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start processing');
-    }
-  };
+    await processIssues(Array.from(selectedIds));
+  }, [selectedIds, processIssues]);
 
   return (
     <div>
@@ -275,7 +162,7 @@ export default function Home() {
           loading={loading}
           sort={sort}
           onSort={handleSort}
-          onRowClick={handleRowClick}
+          onRowClick={openDetailPanel}
         />
       </div>
 
@@ -298,8 +185,8 @@ export default function Home() {
       <IssueDetailPanel
         issue={detailIssue}
         isOpen={isDetailOpen}
-        onClose={handleCloseDetail}
-        onProcess={handleProcessSingle}
+        onClose={closeDetailPanel}
+        onProcess={processSingleIssue}
         isProcessing={processing.isProcessing}
       />
     </div>

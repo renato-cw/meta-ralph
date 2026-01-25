@@ -12,7 +12,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# REPO_ROOT can be overridden via environment variable, defaults to current directory
+REPO_ROOT="${REPO_ROOT:-$(pwd)}"
 
 # Load configuration
 source "$SCRIPT_DIR/config.sh"
@@ -27,6 +28,8 @@ MAX_ISSUES=0
 OFFSET=0
 SINGLE_ISSUE=""
 DRY_RUN=false
+JSON_OUTPUT=false
+ONLY_IDS=""
 BASE_BRANCH="${RALPH_BASE_BRANCH:-main}"
 PARALLEL=1
 VERBOSE=false
@@ -68,6 +71,14 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
+        --json)
+            JSON_OUTPUT=true
+            shift
+            ;;
+        --only-ids)
+            ONLY_IDS="$2"
+            shift 2
+            ;;
         --base-branch)
             BASE_BRANCH="$2"
             shift 2
@@ -98,6 +109,8 @@ Options:
   --offset N             Skip first N issues (default: 0)
   --single ISSUE_ID      Process only a specific issue
   --dry-run              List issues without processing
+  --json                 Output issues as JSON (use with --dry-run)
+  --only-ids ID1,ID2     Process only specific issue IDs (comma-separated)
   --base-branch BRANCH   Base branch for PRs (default: main)
   --parallel N           Process N issues in parallel (default: 1)
   --verbose, -v          Verbose output
@@ -223,6 +236,14 @@ if [[ -n "$SINGLE_ISSUE" ]]; then
     echo -e "${YELLOW}Processing single issue: $SINGLE_ISSUE${NC}"
 fi
 
+# Filter by specific IDs if --only-ids specified
+if [[ -n "$ONLY_IDS" ]]; then
+    IFS=',' read -ra ID_LIST <<< "$ONLY_IDS"
+    id_filter=$(printf '%s\n' "${ID_LIST[@]}" | jq -R . | jq -s .)
+    all_issues=$(echo "$all_issues" | jq --argjson ids "$id_filter" '[.[] | select(.id as $id | $ids | any(. == $id))]')
+    echo -e "${YELLOW}Filtering to ${#ID_LIST[@]} specific issue(s)${NC}"
+fi
+
 issue_count=$(echo "$all_issues" | jq 'length')
 
 # ============================================================================
@@ -230,6 +251,12 @@ issue_count=$(echo "$all_issues" | jq 'length')
 # ============================================================================
 
 if [[ "$DRY_RUN" == "true" ]]; then
+    # JSON output mode
+    if [[ "$JSON_OUTPUT" == "true" ]]; then
+        echo "$all_issues"
+        exit 0
+    fi
+
     echo ""
     echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
     echo -e "${BLUE}  DRY RUN - Issue Queue (sorted by priority)${NC}"
