@@ -196,7 +196,6 @@ export function KeyboardShortcuts({
 
     // Only update if the length has changed and focused index is out of bounds
     if (currentLength !== prevLength && focusedIndex >= currentLength) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting navigation state when data changes
       setFocusedIndex(-1);
     }
 

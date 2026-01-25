@@ -65,7 +65,6 @@ export function ProcessingQueue({
   // This is a legitimate pattern to synchronize local state with external processing state
   useEffect(() => {
     if (processing.isProcessing && !startedAt) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronizing start time with processing state
       setStartedAt(new Date().toISOString());
     } else if (!processing.isProcessing && startedAt) {
       // Reset start time when processing completes

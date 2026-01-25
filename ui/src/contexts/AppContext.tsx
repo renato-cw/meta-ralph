@@ -28,7 +28,7 @@ import type {
 // Types
 // ============================================================================
 
-interface AppContextType {
+export interface AppContextType {
   // Issues data
   issues: Issue[];
   processedIssues: Issue[];
