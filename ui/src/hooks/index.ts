@@ -10,3 +10,4 @@ export { useFilters } from './useFilters';
 export { useKeyboardShortcuts, type KeyboardShortcutsOptions } from './useKeyboardShortcuts';
 export { useGrouping, type GroupedIssues } from './useGrouping';
 export { useVirtualList, usePageSize, PAGE_SIZES, type PageSize } from './useVirtualList';
+export { useSavedViews, type UseSavedViewsOptions, type UseSavedViewsReturn } from './useSavedViews';

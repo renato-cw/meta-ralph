@@ -9,11 +9,12 @@ import { FilterBar } from '@/components/filters/FilterBar';
 import { BulkActionBar } from '@/components/actions/BulkActionBar';
 import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
 import { KeyboardShortcuts } from '@/components/common';
-import { GroupedView, ViewToggle } from '@/components/views';
+import { GroupedView, ViewToggle, SavedViews, SaveViewDialog } from '@/components/views';
 import { Dashboard } from '@/components/dashboard';
 import { ProcessingQueue } from '@/components/queue';
+import { useSavedViews } from '@/hooks';
 import { useApp } from '@/contexts';
-import type { SortField, GroupBy } from '@/lib/types';
+import type { SortField, GroupBy, SavedView } from '@/lib/types';
 
 export default function Home() {
   const {
@@ -90,6 +91,34 @@ export default function Home() {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [queuedIds, setQueuedIds] = useState<string[]>([]);
 
+  // Save view dialog state
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+
+  // Saved views hook
+  const handleLoadView = useCallback((view: SavedView) => {
+    setFilters(view.filters);
+    // Note: sort is managed by useSort hook via toggleSort, so we'd need to add a setSort function
+    // For now, we'll apply the group by
+    setGroupBy(view.groupBy);
+  }, [setFilters, setGroupBy]);
+
+  const {
+    views: savedViews,
+    activeView,
+    saveView,
+    deleteView,
+    loadView,
+    setDefaultView,
+    renameView,
+    duplicateView,
+    matchesView,
+  } = useSavedViews({
+    currentFilters: filters,
+    currentSort: sort,
+    currentGroupBy: groupBy,
+    onLoadView: handleLoadView,
+  });
+
   const handleSort = useCallback((field: SortField) => {
     toggleSort(field);
   }, [toggleSort]);
@@ -126,6 +155,16 @@ export default function Home() {
   const handleCollapseAll = useCallback(() => {
     collapseAllGroups(groupedIssues);
   }, [collapseAllGroups, groupedIssues]);
+
+  const handleSaveViewClick = useCallback(() => {
+    setIsSaveDialogOpen(true);
+  }, []);
+
+  const handleSaveView = useCallback((name: string) => {
+    saveView(name);
+  }, [saveView]);
+
+  const hasUnsavedChanges = activeView ? !matchesView(activeView.id) : false;
 
   return (
     <div>
@@ -217,18 +256,31 @@ export default function Home() {
         />
       </div>
 
-      {/* Results count and view toggle */}
+      {/* Results count, saved views, and view toggle */}
       <div className="flex items-center justify-between mb-4">
-        {(hasActiveFilters || searchQuery) ? (
-          <div className="text-sm text-[var(--muted)]">
-            Showing {processedIssues.length} of {issues.length} issues
-            {searchQuery && ` matching "${searchQuery}"`}
-          </div>
-        ) : (
-          <div className="text-sm text-[var(--muted)]">
-            {processedIssues.length} issues
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {(hasActiveFilters || searchQuery) ? (
+            <div className="text-sm text-[var(--muted)]">
+              Showing {processedIssues.length} of {issues.length} issues
+              {searchQuery && ` matching "${searchQuery}"`}
+            </div>
+          ) : (
+            <div className="text-sm text-[var(--muted)]">
+              {processedIssues.length} issues
+            </div>
+          )}
+          <SavedViews
+            views={savedViews}
+            activeView={activeView}
+            onSelectView={loadView}
+            onSaveClick={handleSaveViewClick}
+            onDeleteView={deleteView}
+            onSetDefault={setDefaultView}
+            onRenameView={renameView}
+            onDuplicateView={duplicateView}
+            hasUnsavedChanges={hasUnsavedChanges}
+          />
+        </div>
         <ViewToggle
           groupBy={groupBy}
           onGroupByChange={handleGroupByChange}
@@ -306,6 +358,16 @@ export default function Home() {
         queuedIds={queuedIds}
         logs={processing.logs}
         onRetryItem={handleRetryItem}
+      />
+
+      {/* Save view dialog */}
+      <SaveViewDialog
+        isOpen={isSaveDialogOpen}
+        onClose={() => setIsSaveDialogOpen(false)}
+        onSave={handleSaveView}
+        currentFilters={filters}
+        currentSort={sort}
+        currentGroupBy={groupBy}
       />
     </div>
   );
