@@ -24,6 +24,7 @@ export interface KeyboardShortcutsOptions {
   onShowHelp?: () => void;
   onToggleFilters?: () => void;
   onRefresh?: () => void;
+  onToggleQueue?: () => void;
 
   // Grouping
   onCollapseAll?: () => void;
@@ -63,6 +64,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     onShowHelp,
     onToggleFilters,
     onRefresh,
+    onToggleQueue,
     onCollapseAll,
     onExpandAll,
     onCycleGroupBy,
@@ -175,6 +177,12 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       return;
     }
 
+    if (matchesShortcut(event, SHORTCUTS.toggleQueue)) {
+      event.preventDefault();
+      onToggleQueue?.();
+      return;
+    }
+
     // Grouping
     if (matchesShortcut(event, SHORTCUTS.collapseAll)) {
       event.preventDefault();
@@ -235,6 +243,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     onShowHelp,
     onToggleFilters,
     onRefresh,
+    onToggleQueue,
     onCollapseAll,
     onExpandAll,
     onCycleGroupBy,

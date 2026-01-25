@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { IssueTable } from '@/components/IssueTable';
 import { ProcessButton } from '@/components/ProcessButton';
 import { LogViewer } from '@/components/LogViewer';
@@ -11,6 +11,7 @@ import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
 import { KeyboardShortcuts } from '@/components/common';
 import { GroupedView, ViewToggle } from '@/components/views';
 import { Dashboard } from '@/components/dashboard';
+import { ProcessingQueue } from '@/components/queue';
 import { useApp } from '@/contexts';
 import type { SortField, GroupBy } from '@/lib/types';
 
@@ -85,14 +86,34 @@ export default function Home() {
   // Filter bar expanded state
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
+  // Queue panel state
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [queuedIds, setQueuedIds] = useState<string[]>([]);
+
   const handleSort = useCallback((field: SortField) => {
     toggleSort(field);
   }, [toggleSort]);
 
   const handleProcess = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    await processIssues(Array.from(selectedIds));
+    const ids = Array.from(selectedIds);
+    setQueuedIds(ids);
+    setIsQueueOpen(true);
+    await processIssues(ids);
   }, [selectedIds, processIssues]);
+
+  const handleToggleQueue = useCallback(() => {
+    setIsQueueOpen(prev => !prev);
+  }, []);
+
+  const handleCloseQueue = useCallback(() => {
+    setIsQueueOpen(false);
+  }, []);
+
+  const handleRetryItem = useCallback(async (id: string) => {
+    setQueuedIds(prev => [...prev, id]);
+    await processIssues([id]);
+  }, [processIssues]);
 
   const handleToggleFilters = useCallback(() => {
     setFiltersExpanded((prev) => !prev);
@@ -112,6 +133,7 @@ export default function Home() {
       <KeyboardShortcuts
         searchInputRef={searchInputRef}
         onToggleFilters={handleToggleFilters}
+        onToggleQueue={handleToggleQueue}
       />
 
       <div className="flex items-center justify-between mb-6">
@@ -273,6 +295,17 @@ export default function Home() {
         onClose={closeDetailPanel}
         onProcess={processSingleIssue}
         isProcessing={processing.isProcessing}
+      />
+
+      {/* Processing queue panel */}
+      <ProcessingQueue
+        isOpen={isQueueOpen}
+        onClose={handleCloseQueue}
+        processing={processing}
+        issues={issues}
+        queuedIds={queuedIds}
+        logs={processing.logs}
+        onRetryItem={handleRetryItem}
       />
     </div>
   );

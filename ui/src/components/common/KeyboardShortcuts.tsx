@@ -13,6 +13,8 @@ interface KeyboardShortcutsProps {
   onToggleFilters?: () => void;
   /** Callback for severity quick-filter toggle */
   onSeverityFilter?: (severity: Severity) => void;
+  /** Callback when queue panel toggle is requested */
+  onToggleQueue?: () => void;
 }
 
 /**
@@ -31,6 +33,7 @@ export function KeyboardShortcuts({
   searchInputRef,
   onToggleFilters,
   onSeverityFilter,
+  onToggleQueue,
 }: KeyboardShortcutsProps) {
   const {
     processedIssues,
@@ -171,6 +174,7 @@ export function KeyboardShortcuts({
     onExpandAll: handleExpandAll,
     onCycleGroupBy: handleCycleGroupBy,
     onFilterBySeverity: handleSeverityFilter,
+    onToggleQueue: onToggleQueue,
     enabled: !showHelp, // Disable shortcuts when help modal is open
   });
 

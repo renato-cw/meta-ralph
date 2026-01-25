@@ -113,6 +113,11 @@ export const SHORTCUTS: Record<string, ShortcutDefinition> = {
     description: 'Refresh issues',
     category: 'ui',
   },
+  toggleQueue: {
+    key: 'q',
+    description: 'Toggle processing queue',
+    category: 'ui',
+  },
   collapseAll: {
     key: 'c',
     description: 'Collapse all groups',
