@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import type { Issue } from '@/lib/types';
 
@@ -39,9 +39,6 @@ export function useSearch(options: UseSearchOptions = {}) {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [scope, setScope] = useState<SearchScope>(searchFields);
   const [history, setHistory] = useLocalStorage<string[]>(historyKey, []);
-
-  // Track if we should add to history (only on Enter or explicit save)
-  const shouldSaveToHistoryRef = useRef(false);
 
   // Debounce the search query
   useEffect(() => {

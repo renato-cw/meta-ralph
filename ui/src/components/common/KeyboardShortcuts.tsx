@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useApp } from '@/contexts';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -60,6 +60,9 @@ export function KeyboardShortcuts({
   // Focused index for navigation
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const [showHelp, setShowHelp] = useState(false);
+
+  // Track previous issues length to detect changes
+  const prevIssuesLengthRef = useRef<number>(processedIssues.length);
 
   // Get the currently focused issue
   const focusedIssue: Issue | null = focusedIndex >= 0 && focusedIndex < processedIssues.length
@@ -186,9 +189,20 @@ export function KeyboardShortcuts({
   }, [focusedIndex, focusedIssue, isDetailOpen, detailIssue, openDetailPanel]);
 
   // Reset focused index when issues change
+  // This is a legitimate pattern to reset navigation state when the data changes
   useEffect(() => {
-    setFocusedIndex(-1);
-  }, [processedIssues.length]);
+    const currentLength = processedIssues.length;
+    const prevLength = prevIssuesLengthRef.current;
+
+    // Only update if the length has changed and focused index is out of bounds
+    if (currentLength !== prevLength && focusedIndex >= currentLength) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting navigation state when data changes
+      setFocusedIndex(-1);
+    }
+
+    // Update the ref for the next render
+    prevIssuesLengthRef.current = currentLength;
+  }, [processedIssues.length, focusedIndex]);
 
   // Scroll focused row into view
   useEffect(() => {

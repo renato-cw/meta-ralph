@@ -71,7 +71,7 @@ const GROUP_OPTIONS: GroupOption[] = [
 export function ViewToggle({
   groupBy,
   onGroupByChange,
-  hasCollapsedGroups,
+  hasCollapsedGroups: _hasCollapsedGroups,
   onCollapseAll,
   onExpandAll,
   groupCount = 0,

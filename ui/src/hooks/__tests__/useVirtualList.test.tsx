@@ -1,5 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { useState } from 'react';
 import { usePageSize, PAGE_SIZES } from '../useVirtualList';
 
 // Note: useVirtualList tests are limited because @tanstack/react-virtual
@@ -8,8 +9,8 @@ import { usePageSize, PAGE_SIZES } from '../useVirtualList';
 
 // Mock useLocalStorage
 jest.mock('../useLocalStorage', () => ({
-  useLocalStorage: <T,>(key: string, defaultValue: T) => {
-    const [value, setValue] = require('react').useState<T>(defaultValue);
+  useLocalStorage: (key: string, defaultValue: unknown) => {
+    const [value, setValue] = useState(defaultValue);
     return [value, setValue] as const;
   },
 }));

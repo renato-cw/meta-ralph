@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import type { FilterState, Issue, Severity, IssueStatus } from '@/lib/types';
 import { DEFAULT_FILTER_STATE } from '@/lib/types';

@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AppProvider, useApp } from '../AppContext';
+import { AppProvider, useApp, useAppIssues } from '../AppContext';
 import type { Issue, ProcessingStatus } from '@/lib/types';
 
 // Helper component to test the context
@@ -424,11 +424,8 @@ describe('AppContext', () => {
 
   describe('Sort State', () => {
     it('provides sort state from hook', async () => {
-      let capturedSort: ReturnType<typeof useApp>['sort'] | null = null;
-
       function SortTestComponent() {
         const ctx = useApp();
-        capturedSort = ctx.sort;
         return (
           <div>
             <div data-testid="sort-field">{ctx.sort.field}</div>
@@ -447,7 +444,7 @@ describe('AppContext', () => {
       );
 
       await waitFor(() => {
-        expect(capturedSort).not.toBeNull();
+        expect(screen.getByTestId('sort-field')).toBeInTheDocument();
       });
 
       // Default sort is priority desc
@@ -567,8 +564,6 @@ describe('Selector Hooks', () => {
   });
 
   it('useAppIssues returns only issues-related state', async () => {
-    const { useAppIssues } = require('../AppContext');
-
     function IssuesHookTestComponent() {
       const { issues, processedIssues, loading, error, fetchIssues, availableProviders } = useAppIssues();
       return (

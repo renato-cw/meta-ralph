@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, type ReactNode } from 'react';
+import { useEffect, useCallback } from 'react';
 import type { Issue, Severity } from '@/lib/types';
 import { IssueMetadata } from './IssueMetadata';
 import { CodeSnippet } from './CodeSnippet';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { StatCard } from './StatCard';
 import { ProviderPieChart } from './ProviderPieChart';
 import { SeverityBarChart } from './SeverityBarChart';

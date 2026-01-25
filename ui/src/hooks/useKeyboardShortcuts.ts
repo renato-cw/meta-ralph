@@ -259,7 +259,8 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     };
   }, [enabled, handleKeyDown]);
 
+  // Return a getter function instead of accessing ref during render
   return {
-    isInputFocused: isInputFocused.current,
+    getIsInputFocused: () => isInputFocused.current,
   };
 }

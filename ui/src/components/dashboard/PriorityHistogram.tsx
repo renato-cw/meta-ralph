@@ -32,16 +32,19 @@ const PRIORITY_COLORS = [
  */
 export function PriorityHistogram({ data, loading = false }: PriorityHistogramProps) {
   if (loading) {
+    // Stable heights for skeleton bars (avoiding Math.random during render)
+    const skeletonHeights = [80, 120, 100, 140, 90];
+
     return (
       <div
         className="h-[200px] flex items-end justify-center gap-2 bg-zinc-800/50 rounded-lg animate-pulse p-4"
         data-testid="priority-histogram-loading"
       >
-        {[...Array(5)].map((_, i) => (
+        {skeletonHeights.map((height, i) => (
           <div
             key={i}
             className="w-12 bg-zinc-700 rounded-t"
-            style={{ height: `${Math.random() * 100 + 40}px` }}
+            style={{ height: `${height}px` }}
           />
         ))}
       </div>

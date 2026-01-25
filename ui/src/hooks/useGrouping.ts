@@ -5,7 +5,7 @@
  * (provider, severity, date, location) with collapsed group tracking.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import type { Issue, GroupBy, Severity } from '@/lib/types';
 import { SEVERITY_ORDER } from '@/lib/types';
@@ -91,7 +91,7 @@ function getGroupKey(issue: Issue, groupBy: GroupBy): string {
       return issue.provider;
     case 'severity':
       return issue.severity;
-    case 'date':
+    case 'date': {
       // Group by relative date
       const now = new Date();
       const lastSeen = issue.metadata?.lastSeen as string | undefined;
@@ -105,12 +105,14 @@ function getGroupKey(issue: Issue, groupBy: GroupBy): string {
       if (diffDays <= 7) return 'This Week';
       if (diffDays <= 30) return 'This Month';
       return 'Older';
-    case 'location':
+    }
+    case 'location': {
       // Group by directory
       const location = issue.location || 'Unknown';
       const lastSlash = location.lastIndexOf('/');
       if (lastSlash === -1) return 'Root';
       return location.substring(0, lastSlash) || 'Root';
+    }
     default:
       return 'all';
   }
@@ -123,7 +125,7 @@ function getGroupSortOrder(groupBy: GroupBy, key: string): number {
   switch (groupBy) {
     case 'severity':
       return SEVERITY_ORDER[key as Severity] ?? 999;
-    case 'date':
+    case 'date': {
       const dateOrder: Record<string, number> = {
         'Today': 0,
         'Yesterday': 1,
@@ -133,6 +135,7 @@ function getGroupSortOrder(groupBy: GroupBy, key: string): number {
         'Unknown Date': 5,
       };
       return dateOrder[key] ?? 999;
+    }
     default:
       return 0; // Alphabetical order for providers and locations
   }
@@ -176,11 +179,6 @@ export function useGrouping(options: UseGroupingOptions = {}): UseGroupingReturn
       return Array.from(set);
     });
   }, [setCollapsedArray]);
-
-  const collapseAll = useCallback(() => {
-    // This will be called with the current group keys
-    // For now, we'll handle this in the component that knows the current groups
-  }, []);
 
   const expandAll = useCallback(() => {
     setCollapsedArray([]);

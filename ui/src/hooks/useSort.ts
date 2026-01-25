@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import type { SortState, SortField, SortDirection, Issue, Severity } from '@/lib/types';
 import { DEFAULT_SORT_STATE } from '@/lib/types';
@@ -74,7 +74,7 @@ export function useSort(storageKey: string = 'meta-ralph-sort') {
           return a.title.localeCompare(b.title) * multiplier;
         case 'provider':
           return a.provider.localeCompare(b.provider) * multiplier;
-        case 'date':
+        case 'date': {
           // Date sorting will use metadata.firstSeen or metadata.lastSeen when available
           const aDate = (a.metadata?.firstSeen as string) || (a.metadata?.lastSeen as string) || '';
           const bDate = (b.metadata?.firstSeen as string) || (b.metadata?.lastSeen as string) || '';
@@ -83,6 +83,7 @@ export function useSort(storageKey: string = 'meta-ralph-sort') {
             return (a.priority - b.priority) * multiplier;
           }
           return aDate.localeCompare(bDate) * multiplier;
+        }
         default:
           return 0;
       }

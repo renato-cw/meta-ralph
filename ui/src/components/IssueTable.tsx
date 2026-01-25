@@ -1,10 +1,9 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { IssueRow } from './IssueRow';
 import { PageSizeSelector, LoadMoreButton } from './common';
-import { useVirtualList, type PageSize } from '@/hooks/useVirtualList';
+import { useVirtualList } from '@/hooks/useVirtualList';
 import type { Issue, SortState, SortField } from '@/lib/types';
 
 /** Threshold for enabling virtualization (number of items) */
