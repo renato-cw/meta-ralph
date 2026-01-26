@@ -7,6 +7,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Source workspace manager for multi-repo support (optional)
+# This enables processing issues that target external repositories
+source "$SCRIPT_DIR/lib/workspace-manager.sh" 2>/dev/null || true
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -380,6 +384,68 @@ process_issue() {
 
     # Emit start activity
     emit_activity "$issue_id" "message" "" "Starting to process issue: $issue_title" "running"
+
+    # ========================================================================
+    # MULTI-REPO SUPPORT (PRD-10)
+    # Detect and clone target/context repositories from enriched issue JSON
+    # ========================================================================
+
+    # Extract multi-repo fields from issue JSON (set by providers like Linear)
+    local target_repo_full=$(echo "$issue_json" | jq -r '.target_repo.full_name // empty')
+    local context_repos_json=$(echo "$issue_json" | jq -c '.context_repos // []')
+
+    # If target_repo is specified and workspace-manager is available, set up the workspace
+    if [[ -n "$target_repo_full" && "$target_repo_full" != "null" ]] && declare -f ensure_repo >/dev/null 2>&1; then
+        echo -e "${YELLOW}Multi-repo mode detected: target_repo=$target_repo_full${NC}"
+        emit_activity "$issue_id" "message" "" "Multi-repo mode: target=$target_repo_full" "running"
+
+        # Ensure target repository is cloned/updated
+        echo -e "${YELLOW}Ensuring target repository is available...${NC}"
+        emit_activity "$issue_id" "tool" "workspace-manager" "Cloning/updating $target_repo_full" "running"
+
+        if ensure_repo "$target_repo_full"; then
+            # Get the local path for the target repo
+            local target_repo_path
+            target_repo_path=$(get_repo_path "$target_repo_full")
+
+            if [[ -d "$target_repo_path" ]]; then
+                # Override TARGET_REPO with the cloned repository path
+                TARGET_REPO="$target_repo_path"
+                echo -e "${GREEN}Target repository ready: $TARGET_REPO${NC}"
+                emit_activity "$issue_id" "tool" "workspace-manager" "Target repository ready: $target_repo_full" "success"
+            else
+                echo -e "${RED}ERROR: Target repo path not found: $target_repo_path${NC}"
+                emit_error "$issue_id" "Target repo path not found: $target_repo_path"
+                return 1
+            fi
+        else
+            echo -e "${RED}ERROR: Failed to clone/update target repository: $target_repo_full${NC}"
+            emit_error "$issue_id" "Failed to clone/update target repository: $target_repo_full"
+            return 1
+        fi
+
+        # Clone context repositories (for reference, not for modification)
+        if [[ "$context_repos_json" != "[]" ]]; then
+            echo -e "${YELLOW}Cloning context repositories for reference...${NC}"
+
+            for context_repo in $(echo "$context_repos_json" | jq -r '.[].full_name // empty'); do
+                if [[ -n "$context_repo" ]]; then
+                    echo -e "${YELLOW}  - $context_repo${NC}"
+                    emit_activity "$issue_id" "tool" "workspace-manager" "Cloning context repo: $context_repo" "running"
+
+                    if ensure_repo "$context_repo"; then
+                        local context_path
+                        context_path=$(get_repo_path "$context_repo")
+                        echo -e "${GREEN}    Ready at: $context_path${NC}"
+                        emit_activity "$issue_id" "tool" "workspace-manager" "Context repo ready: $context_repo" "success"
+                    else
+                        echo -e "${YELLOW}    Warning: Failed to clone context repo (continuing anyway)${NC}"
+                        emit_activity "$issue_id" "tool" "workspace-manager" "Warning: Failed to clone context repo $context_repo" "warning"
+                    fi
+                fi
+            done
+        fi
+    fi
 
     # Change to TARGET_REPO if set
     if [[ -n "$TARGET_REPO" ]]; then

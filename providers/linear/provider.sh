@@ -168,13 +168,13 @@ provider_fetch() {
     ')
 
     # Optionally enrich with multi-repo info (if issue-parser is available)
-    if type enrich_issue_with_repos &>/dev/null; then
+    if declare -f enrich_issue_with_repos >/dev/null 2>&1; then
         # Process each issue through the parser for multi-repo detection
         echo "$issues" | jq -c '.[]' | while read -r issue; do
             # Quick check if issue might reference repos
-            if echo "$issue" | /Users/renatooliveira/Documents/www/meta-ralph/lib/issue-parser.sh check 2>/dev/null | grep -q "yes"; then
+            if echo "$issue" | "$RALPH_DIR/lib/issue-parser.sh" check 2>/dev/null | grep -q "yes"; then
                 # Enrich with repo info
-                echo "$issue" | /Users/renatooliveira/Documents/www/meta-ralph/lib/issue-parser.sh enrich 2>/dev/null
+                echo "$issue" | "$RALPH_DIR/lib/issue-parser.sh" enrich 2>/dev/null
             else
                 echo "$issue"
             fi
