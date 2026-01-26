@@ -6,6 +6,33 @@ import { IssueRow } from '@/components/IssueRow';
 import type { Issue, GroupBy, SortState, SortField } from '@/lib/types';
 import type { GroupedIssues } from '@/hooks/useGrouping';
 
+/**
+ * Extract repository full name from issue (supports both MultiRepoIssue and metadata).
+ */
+function getRepoFullName(issue: Issue): string | null {
+  // Check for target_repo directly on extended issue (MultiRepoIssue)
+  const extendedIssue = issue as Issue & { target_repo?: { fullName?: string; repo?: string } };
+  if (extendedIssue.target_repo?.fullName) {
+    return extendedIssue.target_repo.fullName;
+  }
+  if (extendedIssue.target_repo?.repo) {
+    return extendedIssue.target_repo.repo;
+  }
+  // Check metadata for target_repo (fallback for normalized issues)
+  if (issue.metadata?.target_repo) {
+    const targetRepo = issue.metadata.target_repo as { fullName?: string; full_name?: string; repo?: string };
+    return targetRepo.fullName || targetRepo.full_name || targetRepo.repo || null;
+  }
+  return null;
+}
+
+/**
+ * Check if any issues have multi-repo target.
+ */
+function hasMultiRepoIssues(issues: Issue[]): boolean {
+  return issues.some((issue) => getRepoFullName(issue) !== null);
+}
+
 interface GroupedViewProps {
   /** Grouped issues to display */
   groups: GroupedIssues[];
@@ -96,6 +123,12 @@ export function GroupedView({
     return counts;
   }, [groups, selectedIds]);
 
+  // Determine if we should show the repo column (only when multi-repo issues exist)
+  const showRepoColumn = useMemo(() => {
+    const allIssues = groups.flatMap((g) => g.issues);
+    return hasMultiRepoIssues(allIssues);
+  }, [groups]);
+
   const isCollapsed = useCallback(
     (key: string) => collapsedGroups.has(key),
     [collapsedGroups]
@@ -134,6 +167,9 @@ export function GroupedView({
               </th>
               <th className="p-3 w-12 text-[var(--muted)]">#</th>
               <SortableHeader field="provider" label="Provider" currentSort={sort} onSort={onSort} />
+              {showRepoColumn && (
+                <SortableHeader field="repo" label="Repo" currentSort={sort} onSort={onSort} />
+              )}
               <SortableHeader field="priority" label="Priority" currentSort={sort} onSort={onSort} />
               <SortableHeader
                 field="severity"
@@ -161,6 +197,7 @@ export function GroupedView({
                 selected={selectedIds.has(issue.id)}
                 onToggle={onToggle}
                 onRowClick={onRowClick}
+                showRepoColumn={showRepoColumn}
               />
             ))}
           </tbody>
@@ -211,6 +248,14 @@ export function GroupedView({
                             onSort={onSort}
                           />
                         )}
+                        {showRepoColumn && (
+                          <SortableHeader
+                            field="repo"
+                            label="Repo"
+                            currentSort={sort}
+                            onSort={onSort}
+                          />
+                        )}
                         <SortableHeader
                           field="priority"
                           label="Priority"
@@ -253,6 +298,7 @@ export function GroupedView({
                         onRowClick={onRowClick}
                         hideProvider={groupBy === 'provider'}
                         hideSeverity={groupBy === 'severity'}
+                        showRepoColumn={showRepoColumn}
                       />
                     ))}
                   </tbody>

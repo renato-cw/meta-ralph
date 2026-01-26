@@ -17,6 +17,23 @@ const SEVERITY_SORT_ORDER: Record<Severity, number> = {
 };
 
 /**
+ * Extract repository full name from issue (supports both MultiRepoIssue and metadata).
+ */
+function getRepoFullName(issue: Issue): string | null {
+  // Check for target_repo directly on extended issue (MultiRepoIssue)
+  const extendedIssue = issue as Issue & { target_repo?: { fullName?: string } };
+  if (extendedIssue.target_repo?.fullName) {
+    return extendedIssue.target_repo.fullName;
+  }
+  // Check metadata for target_repo (fallback for normalized issues)
+  if (issue.metadata?.target_repo) {
+    const targetRepo = issue.metadata.target_repo as { fullName?: string; full_name?: string };
+    return targetRepo.fullName || targetRepo.full_name || null;
+  }
+  return null;
+}
+
+/**
  * Sort hook with localStorage persistence and URL param sync.
  *
  * @param storageKey - The localStorage key for persisting sort state
@@ -83,6 +100,16 @@ export function useSort(storageKey: string = 'meta-ralph-sort') {
             return (a.priority - b.priority) * multiplier;
           }
           return aDate.localeCompare(bDate) * multiplier;
+        }
+        case 'repo': {
+          // Repo sorting uses target_repo.fullName from metadata or extended issue
+          const aRepo = getRepoFullName(a);
+          const bRepo = getRepoFullName(b);
+          // Issues without repo go to the end
+          if (!aRepo && !bRepo) return 0;
+          if (!aRepo) return 1;
+          if (!bRepo) return -1;
+          return aRepo.localeCompare(bRepo) * multiplier;
         }
         default:
           return 0;

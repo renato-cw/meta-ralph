@@ -75,7 +75,7 @@ export interface QueueItem {
 /**
  * Fields that can be used for sorting.
  */
-export type SortField = 'priority' | 'severity' | 'count' | 'date' | 'title' | 'provider';
+export type SortField = 'priority' | 'severity' | 'count' | 'date' | 'title' | 'provider' | 'repo';
 
 /**
  * Sort direction.
