@@ -1,18 +1,29 @@
 'use client';
 
 import { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, CIStatus, CICheck } from '@/lib/types';
+import type {
+  Issue,
+  ProcessingStatus,
+  Activity,
+  ExecutionMetrics,
+  CIStatus,
+  CICheck,
+  ImplementationPlan,
+  PlanProgress as PlanProgressType,
+} from '@/lib/types';
 import { QueueItem } from './QueueItem';
 import { QueueProgress } from './QueueProgress';
 import { ActivityFeed } from './ActivityFeed';
 import { CIStatusPanel } from './CIStatusPanel';
+import { PlanViewer } from './PlanViewer';
+import { PlanProgress } from './PlanProgress';
 import { parseLogs } from '@/lib/events';
 import { CIPollingState } from '@/hooks/useCIStatus';
 
 /**
  * View mode for the processing output section.
  */
-type OutputViewMode = 'activity' | 'logs';
+type OutputViewMode = 'activity' | 'logs' | 'plan';
 
 interface ProcessingQueueProps {
   /** Whether the queue panel is open */
@@ -59,6 +70,20 @@ interface ProcessingQueueProps {
   onCiAutoFix?: () => void;
   /** Callback when viewing CI check details */
   onCiViewDetails?: (check: CICheck) => void;
+  /** Plan viewer props */
+  plan?: ImplementationPlan | null;
+  /** Plan progress */
+  planProgress?: PlanProgressType | null;
+  /** Whether plan is loading */
+  planIsLoading?: boolean;
+  /** Plan error message */
+  planError?: string | null;
+  /** Whether plan was manually modified */
+  planModifiedByUser?: boolean;
+  /** Callback to update plan */
+  onPlanUpdate?: (rawMarkdown: string) => void;
+  /** Callback to refresh plan */
+  onPlanRefresh?: () => void;
 }
 
 type QueueItemStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -99,6 +124,13 @@ export function ProcessingQueue({
   onCiRefresh,
   onCiAutoFix,
   onCiViewDetails,
+  plan,
+  planProgress,
+  planIsLoading = false,
+  planError,
+  planModifiedByUser = false,
+  onPlanUpdate,
+  onPlanRefresh,
 }: ProcessingQueueProps) {
   // Track when processing started for ETA calculation
   const [startedAt, setStartedAt] = useState<string | undefined>();
@@ -434,8 +466,8 @@ export function ProcessingQueue({
           </div>
         )}
 
-        {/* Output section - Activity Feed or Logs */}
-        {(processing.isProcessing || logs.length > 0) && (
+        {/* Output section - Activity Feed, Logs, or Plan */}
+        {(processing.isProcessing || logs.length > 0 || plan) && (
           <OutputSection
             logs={logs}
             activities={activities}
@@ -443,6 +475,13 @@ export function ProcessingQueue({
             isProcessing={processing.isProcessing}
             viewMode={outputViewMode}
             onViewModeChange={setOutputViewMode}
+            plan={plan ?? null}
+            planProgress={planProgress ?? null}
+            planIsLoading={planIsLoading}
+            planError={planError ?? null}
+            planModifiedByUser={planModifiedByUser}
+            onPlanUpdate={onPlanUpdate}
+            onPlanRefresh={onPlanRefresh}
           />
         )}
       </div>
@@ -451,7 +490,7 @@ export function ProcessingQueue({
 }
 
 /**
- * Output section with toggle between Activity Feed and Raw Logs views.
+ * Output section with toggle between Activity Feed, Raw Logs, and Plan views.
  */
 interface OutputSectionProps {
   logs: string[];
@@ -460,6 +499,13 @@ interface OutputSectionProps {
   isProcessing: boolean;
   viewMode: OutputViewMode;
   onViewModeChange: (mode: OutputViewMode) => void;
+  plan: ImplementationPlan | null;
+  planProgress: PlanProgressType | null;
+  planIsLoading: boolean;
+  planError: string | null;
+  planModifiedByUser: boolean;
+  onPlanUpdate?: (rawMarkdown: string) => void;
+  onPlanRefresh?: () => void;
 }
 
 function OutputSection({
@@ -469,6 +515,13 @@ function OutputSection({
   isProcessing,
   viewMode,
   onViewModeChange,
+  plan,
+  planProgress,
+  planIsLoading,
+  planError,
+  planModifiedByUser,
+  onPlanUpdate,
+  onPlanRefresh,
 }: OutputSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isFullHeight, setIsFullHeight] = useState(false);
@@ -533,6 +586,16 @@ function OutputSection({
               >
                 Logs ({logs.length})
               </button>
+              <button
+                onClick={() => onViewModeChange('plan')}
+                className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                  viewMode === 'plan'
+                    ? 'bg-[var(--card)] text-[var(--foreground)]'
+                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                Plan {plan ? (planProgress ? `(${planProgress.percentage}%)` : '') : ''}
+              </button>
             </div>
           )}
 
@@ -573,6 +636,17 @@ function OutputSection({
                 metrics={metrics}
                 isProcessing={isProcessing}
                 maxHeight={isFullHeight ? 'h-[calc(100%-1rem)]' : 'h-[calc(100%-1rem)]'}
+              />
+            </div>
+          ) : viewMode === 'plan' ? (
+            <div className="h-full p-3 overflow-y-auto">
+              <PlanViewer
+                plan={plan}
+                isLoading={planIsLoading}
+                error={planError}
+                modifiedByUser={planModifiedByUser}
+                onUpdate={onPlanUpdate}
+                onRefresh={onPlanRefresh}
               />
             </div>
           ) : (

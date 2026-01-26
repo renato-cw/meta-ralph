@@ -677,3 +677,105 @@ export interface CIFixResponse {
   fixAttempted: boolean;
   newCommitSha?: string;
 }
+
+// ============================================================================
+// Plan Viewer Types (PRD-08)
+// ============================================================================
+
+/**
+ * A file identified in the implementation plan with completion tracking.
+ */
+export interface PlanFile {
+  path: string;
+  description: string;
+  completed: boolean;
+}
+
+/**
+ * A single implementation step with completion status.
+ */
+export interface PlanStep {
+  number: number;
+  description: string;
+  completed: boolean;
+}
+
+/**
+ * A risk and its mitigation strategy.
+ */
+export interface PlanRisk {
+  risk: string;
+  mitigation: string;
+}
+
+/**
+ * A progress log entry from an iteration.
+ */
+export interface ProgressEntry {
+  iteration: number;
+  timestamp: string;
+  notes: string[];
+}
+
+/**
+ * Analysis section of the implementation plan.
+ */
+export interface PlanAnalysis {
+  filesIdentified: PlanFile[];
+  rootCause: string;
+  proposedSolution: string;
+}
+
+/**
+ * Complete implementation plan structure.
+ */
+export interface ImplementationPlan {
+  issueId: string;
+  issueTitle: string;
+  createdAt: string;
+  updatedAt: string;
+  analysis: PlanAnalysis;
+  steps: PlanStep[];
+  risks: PlanRisk[];
+  testStrategy: string;
+  progressLog: ProgressEntry[];
+  rawMarkdown: string;
+}
+
+/**
+ * Progress calculation for plan completion.
+ */
+export interface PlanProgress {
+  totalSteps: number;
+  completedSteps: number;
+  totalFiles: number;
+  completedFiles: number;
+  percentage: number;
+}
+
+/**
+ * Response from GET /api/plan/[issueId] endpoint.
+ */
+export interface PlanApiResponse {
+  issueId: string;
+  exists: boolean;
+  plan: ImplementationPlan | null;
+  progress: PlanProgress | null;
+  modifiedByUser: boolean;
+}
+
+/**
+ * Request body for PUT /api/plan/[issueId] endpoint.
+ */
+export interface PlanUpdateRequest {
+  rawMarkdown: string;
+}
+
+/**
+ * Response from PUT /api/plan/[issueId] endpoint.
+ */
+export interface PlanUpdateResponse {
+  success: boolean;
+  message: string;
+  plan?: ImplementationPlan;
+}

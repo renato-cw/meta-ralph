@@ -6,3 +6,5 @@ export { ActivityItem } from './ActivityItem';
 export { ActivityFeed } from './ActivityFeed';
 export { MetricsDisplay } from './MetricsDisplay';
 export { CIStatusPanel, type CIStatusPanelProps } from './CIStatusPanel';
+export { PlanProgress, type PlanProgressProps } from './PlanProgress';
+export { PlanViewer, type PlanViewerProps } from './PlanViewer';

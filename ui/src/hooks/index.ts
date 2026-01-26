@@ -26,3 +26,9 @@ export {
   type UseCIStatusOptions,
   type UseCIStatusReturn,
 } from './useCIStatus';
+export {
+  usePlan,
+  type UsePlanState,
+  type UsePlanReturn,
+  type UsePlanOptions,
+} from './usePlan';
