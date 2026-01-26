@@ -45,12 +45,42 @@ export GITHUB_OWNER="${GITHUB_OWNER:-}"
 export GITHUB_REPO="${GITHUB_REPO:-}"
 
 # ============================================================================
+# CODECOV CONFIGURATION
+# ============================================================================
+# API Configuration
+export CODECOV_API_URL="${CODECOV_API_URL:-https://api.codecov.io}"
+export CODECOV_API_TOKEN="${CODECOV_API_TOKEN:-}"
+
+# Repository Identification
+export CODECOV_SERVICE="${CODECOV_SERVICE:-github}"  # github, gitlab, bitbucket
+export CODECOV_OWNER="${CODECOV_OWNER:-}"
+export CODECOV_REPO="${CODECOV_REPO:-}"
+
+# Thresholds
+export CODECOV_MIN_COVERAGE="${CODECOV_MIN_COVERAGE:-50}"        # Only fetch files below this %
+export CODECOV_TARGET_COVERAGE="${CODECOV_TARGET_COVERAGE:-80}"  # Target coverage in PRD
+export CODECOV_MAX_FILES="${CODECOV_MAX_FILES:-20}"              # Max files to process
+
+# Paths and Exclusions (comma-separated patterns)
+export CODECOV_CRITICAL_PATHS="${CODECOV_CRITICAL_PATHS:-src/core,src/lib}"
+export CODECOV_EXCLUDE_PATTERNS="${CODECOV_EXCLUDE_PATTERNS:-*.test.*,*.spec.*,__tests__,__mocks__,node_modules,vendor,*.d.ts}"
+
+# ============================================================================
 # RALPH SETTINGS
 # ============================================================================
 export RALPH_MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-10}"
 export RALPH_BASE_BRANCH="${RALPH_BASE_BRANCH:-main}"
 export RALPH_LOG_DIR="${RALPH_LOG_DIR:-.ralph-logs}"
 export RALPH_PARALLEL="${RALPH_PARALLEL:-1}"
+
+# ============================================================================
+# TARGET REPOSITORY (optional - for working on a different repo)
+# ============================================================================
+# If set, Ralph will cd to this directory before processing issues
+export TARGET_REPO="${TARGET_REPO:-}"
+
+# Force new branch with timestamp for each issue (avoids branch conflicts)
+export RALPH_FORCE_NEW_BRANCH="${RALPH_FORCE_NEW_BRANCH:-true}"
 
 # ============================================================================
 # PRIORITY WEIGHTS (0-100)
@@ -69,6 +99,11 @@ export PRIORITY_GITHUB_SECURITY="${PRIORITY_GITHUB_SECURITY:-95}"
 export PRIORITY_GITHUB_BUG="${PRIORITY_GITHUB_BUG:-40}"
 export PRIORITY_GITHUB_ENHANCEMENT="${PRIORITY_GITHUB_ENHANCEMENT:-10}"
 
+export PRIORITY_CODECOV_CRITICAL="${PRIORITY_CODECOV_CRITICAL:-100}"   # 0-20% coverage
+export PRIORITY_CODECOV_HIGH="${PRIORITY_CODECOV_HIGH:-80}"            # 21-40% coverage
+export PRIORITY_CODECOV_MEDIUM="${PRIORITY_CODECOV_MEDIUM:-60}"        # 41-60% coverage
+export PRIORITY_CODECOV_LOW="${PRIORITY_CODECOV_LOW:-40}"              # 61-80% coverage
+
 # ============================================================================
 # VALIDATION
 # ============================================================================
@@ -86,6 +121,21 @@ validate_config() {
         errors=$((errors + 1))
     fi
 
+    if [[ " $* " =~ " codecov " ]]; then
+        if [[ -z "$CODECOV_API_TOKEN" ]]; then
+            echo "ERROR: CODECOV_API_TOKEN not set" >&2
+            errors=$((errors + 1))
+        fi
+        if [[ -z "$CODECOV_OWNER" ]]; then
+            echo "ERROR: CODECOV_OWNER not set" >&2
+            errors=$((errors + 1))
+        fi
+        if [[ -z "$CODECOV_REPO" ]]; then
+            echo "ERROR: CODECOV_REPO not set" >&2
+            errors=$((errors + 1))
+        fi
+    fi
+
     return $errors
 }
 
@@ -97,6 +147,7 @@ config_loaded() {
     echo "Meta-Ralph config loaded from: $ENV_FILE"
     echo "  Zeropath: ${ZEROPATH_ORGANIZATION_ID:-(not configured)}"
     echo "  Sentry: ${SENTRY_ORGANIZATION:-}/${SENTRY_PROJECT:-(not configured)}"
+    echo "  Codecov: ${CODECOV_OWNER:-}/${CODECOV_REPO:-(not configured)}"
     echo "  Max iterations: $RALPH_MAX_ITERATIONS"
     echo "  Base branch: $RALPH_BASE_BRANCH"
 }

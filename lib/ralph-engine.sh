@@ -134,11 +134,26 @@ process_issue() {
     local issue_id=$(echo "$issue_json" | jq -r '.id')
     local issue_title=$(echo "$issue_json" | jq -r '.title')
 
+    # Change to TARGET_REPO if set
+    if [[ -n "$TARGET_REPO" ]]; then
+        echo -e "${YELLOW}Changing to target repository: $TARGET_REPO${NC}"
+        cd "$TARGET_REPO" || {
+            echo -e "${RED}ERROR: Could not change to TARGET_REPO: $TARGET_REPO${NC}"
+            return 1
+        }
+    fi
+
     # Load provider
     source "$SCRIPT_DIR/providers/$provider_name/provider.sh"
 
     # Get branch name from provider
     local branch_name=$(provider_branch_name "$issue_json")
+
+    # Add timestamp suffix if RALPH_FORCE_NEW_BRANCH is true (default)
+    if [[ "${RALPH_FORCE_NEW_BRANCH:-true}" == "true" ]]; then
+        local timestamp=$(date +%H%M%S)
+        branch_name="${branch_name}-${timestamp}"
+    fi
 
     echo -e "${YELLOW}Preparing branch: $branch_name${NC}"
 
@@ -147,6 +162,7 @@ process_issue() {
     git pull origin "$base_branch" 2>/dev/null || true
 
     # Create or checkout branch
+    # With RALPH_FORCE_NEW_BRANCH=true, branch should always be new
     if git show-ref --verify --quiet "refs/heads/$branch_name"; then
         echo -e "${YELLOW}Branch exists, checking out...${NC}"
         git checkout "$branch_name"

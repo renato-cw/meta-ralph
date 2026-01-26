@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   Theme CSS Variables
+   ============================================================================ */
+
+/* Dark theme (default) */
+:root,
+:root.dark,
+[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --success: #22c55e;
+  --warning: #eab308;
+  --danger: #ef4444;
+  --muted: #6b7280;
+  --border: #27272a;
+  --card: #18181b;
+
+  /* Additional dark theme colors */
+  --card-foreground: #ededed;
+  --muted-foreground: #a1a1aa;
+  --input: #27272a;
+  --input-foreground: #ededed;
+  --ring: #3b82f6;
+  --selection: rgba(59, 130, 246, 0.3);
+}
+
+/* Light theme */
+:root.light,
+[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --success: #16a34a;
+  --warning: #ca8a04;
+  --danger: #dc2626;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --card: #f4f4f5;
+
+  /* Additional light theme colors */
+  --card-foreground: #171717;
+  --muted-foreground: #52525b;
+  --input: #e4e4e7;
+  --input-foreground: #171717;
+  --ring: #2563eb;
+  --selection: rgba(37, 99, 235, 0.2);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Severity badges - Dark theme */
+:root.dark .badge-critical,
+[data-theme="dark"] .badge-critical,
+:root:not(.light) .badge-critical {
+  background-color: #7f1d1d;
+  color: #fecaca;
+}
+
+:root.dark .badge-high,
+[data-theme="dark"] .badge-high,
+:root:not(.light) .badge-high {
+  background-color: #7c2d12;
+  color: #fed7aa;
+}
+
+:root.dark .badge-medium,
+[data-theme="dark"] .badge-medium,
+:root:not(.light) .badge-medium {
+  background-color: #713f12;
+  color: #fef08a;
+}
+
+:root.dark .badge-low,
+[data-theme="dark"] .badge-low,
+:root:not(.light) .badge-low {
+  background-color: #14532d;
+  color: #bbf7d0;
+}
+
+:root.dark .badge-info,
+[data-theme="dark"] .badge-info,
+:root:not(.light) .badge-info {
+  background-color: #1e3a5f;
+  color: #bfdbfe;
+}
+
+/* Severity badges - Light theme */
+:root.light .badge-critical,
+[data-theme="light"] .badge-critical {
+  background-color: #fecaca;
+  color: #7f1d1d;
+}
+
+:root.light .badge-high,
+[data-theme="light"] .badge-high {
+  background-color: #fed7aa;
+  color: #7c2d12;
+}
+
+:root.light .badge-medium,
+[data-theme="light"] .badge-medium {
+  background-color: #fef08a;
+  color: #713f12;
+}
+
+:root.light .badge-low,
+[data-theme="light"] .badge-low {
+  background-color: #bbf7d0;
+  color: #14532d;
+}
+
+:root.light .badge-info,
+[data-theme="light"] .badge-info {
+  background-color: #bfdbfe;
+  color: #1e3a5f;
+}
+
+/* Slide-in animation for panels */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
+}
