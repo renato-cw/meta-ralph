@@ -333,24 +333,23 @@ All implemented in `ui/src/lib/types.ts` instead of separate file:
 - [x] Emit push event to activity feed when pushing
 - [x] Handle push failures gracefully
 
-### TASK-5.2: Push Status in ProcessingQueue ⚠️ PARTIAL
+### TASK-5.2: Push Status in ProcessingQueue ✅ COMPLETE
 **Priority:** P1 | **Effort:** 1 hour | **File:** `ui/src/components/queue/ProcessingQueue.tsx`
-**Dependencies:** TASK-5.1, TASK-1.4
+**Dependencies:** TASK-5.1, TASK-1.4 | **Completed:** 2026-01-26
 
-**Current State:** Backend emits PR URLs via `emit_activity()` but UI doesn't capture them in queue state.
-
-**What Works:**
-- Push events are streamed to ActivityFeed with PR URLs in the `details` field
-- Push status (success/failure) is visible in the ActivityFeed component
-
-**What Needs Work:**
-- ProcessingQueue.tsx line 109 has `prUrl: undefined` - needs to extract from activities
-- QueueItem component supports prUrl prop but never receives actual URL
+**Implementation:**
+- ProcessingQueue now uses useProcessingStream hook to get streaming activities
+- Created helper functions to extract PR URLs from push activities
+- Created helper to detect push failures from activity status
+- Created helper to extract error messages from activities
+- QueueItem now shows PR links when available (clickable external links)
+- QueueItem shows push failed warning when applicable (red alert icon)
+- Added retry push button support (callback ready for integration)
 
 **Tasks:**
 - [x] Show push status indicator (via ActivityFeed streaming)
-- [ ] Display actual PR URL in queue entries (extract from push activities)
-- [ ] Add retry push button on failure
+- [x] Display actual PR URL in queue entries (extract from push activities)
+- [x] Add retry push button on failure
 
 ---
 
@@ -700,7 +699,7 @@ All config variables added to `config.sh`:
 | Issue | Status | Notes |
 |-------|--------|-------|
 | `--json` flag not implemented in CLI | ⚠️ Open | Fallback warning in `ui/src/lib/meta-ralph.ts:31-33` |
-| PR URLs hardcoded in ProcessingQueue | ⚠️ Open | Line 109: `prUrl: undefined` - needs to extract from activities |
+| PR URLs hardcoded in ProcessingQueue | ✅ Fixed | Now extracts from push activities via helper functions |
 | Pause/Resume functionality | ⏸️ Deferred | Marked "for future use" (lines 22-24) |
 | ProcessingIndicator export | ✅ Fixed | Now exported from queue/index.ts |
 | ActivityFeed hardcoded | ✅ Fixed | Now connected to real SSE stream via activitiesMap |

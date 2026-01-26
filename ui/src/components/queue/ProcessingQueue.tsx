@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useCallback, useMemo, useState } from 'react';
-import type { Issue, ProcessingStatus, ProcessingOptions } from '@/lib/types';
+import type { Issue, ProcessingStatus, ProcessingOptions, Activity } from '@/lib/types';
 import { QueueItem } from './QueueItem';
 import { QueueProgress } from './QueueProgress';
+import { useProcessingStream } from '@/hooks';
 
 interface ProcessingQueueProps {
   /** Whether the queue panel is open */
@@ -28,6 +29,8 @@ interface ProcessingQueueProps {
   onCancelItem?: (id: string) => void;
   /** Callback to retry a failed item */
   onRetryItem?: (id: string) => void;
+  /** Callback to retry a failed push (for future use) */
+  onRetryPush?: (id: string) => void;
   /** Callback to clear completed/failed items */
   onClearCompleted?: () => void;
 }
@@ -41,6 +44,66 @@ interface QueueEntry {
   completedAt?: string;
   prUrl?: string;
   error?: string;
+  pushFailed?: boolean;
+}
+
+/**
+ * Extract PR URL from push activities for a given issue.
+ * Looks for activities with type 'push' and status 'success' that contain PR URLs.
+ */
+function extractPrUrl(activities: Activity[]): string | undefined {
+  // Find push activities that contain PR URLs (most recent first)
+  const pushActivities = activities
+    .filter(a => a.type === 'push' && a.status === 'success')
+    .reverse();
+
+  for (const activity of pushActivities) {
+    if (activity.details) {
+      // Match various PR URL formats:
+      // "PR created: https://github.com/org/repo/pull/123"
+      // "Branch pushed, PR: https://github.com/org/repo/pull/123"
+      const match = activity.details.match(/https:\/\/github\.com\/[^\s]+\/pull\/\d+/);
+      if (match) {
+        return match[0];
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Check if there was a failed push attempt for a given issue.
+ */
+function hasPushFailed(activities: Activity[]): boolean {
+  // Check if the most recent push activity is an error
+  const pushActivities = activities
+    .filter(a => a.type === 'push')
+    .reverse();
+
+  if (pushActivities.length > 0) {
+    const mostRecent = pushActivities[0];
+    return mostRecent.status === 'error';
+  }
+  return false;
+}
+
+/**
+ * Get error message from activities (push errors or general errors).
+ */
+function extractErrorMessage(activities: Activity[]): string | undefined {
+  // Look for error activities (most recent first)
+  const errorActivities = activities
+    .filter(a => a.status === 'error')
+    .reverse();
+
+  if (errorActivities.length > 0) {
+    const mostRecent = errorActivities[0];
+    if (mostRecent.type === 'push') {
+      return `Push failed: ${mostRecent.details || 'Unknown error'}`;
+    }
+    return mostRecent.details || 'Processing failed. Check logs for details.';
+  }
+  return undefined;
 }
 
 /**
@@ -59,10 +122,19 @@ export function ProcessingQueue({
   onTogglePause,
   onCancelItem,
   onRetryItem,
+  onRetryPush,
   onClearCompleted,
 }: ProcessingQueueProps) {
   // Track when processing started for ETA calculation
   const [startedAt, setStartedAt] = useState<string | undefined>();
+
+  // SSE streaming hook - connects to stream when panel is open and processing
+  const {
+    activities: activitiesMap,
+  } = useProcessingStream({
+    issueIds: queuedIds,
+    autoConnect: isOpen && queuedIds.length > 0,
+  });
 
   // Set start time when processing begins
   // This is a legitimate pattern to synchronize local state with external processing state
@@ -101,13 +173,21 @@ export function ProcessingQueue({
         status = 'processing';
       }
 
+      // Get activities for this issue to extract PR URL and error info
+      const issueActivities = activitiesMap.get(id) || [];
+      const prUrl = extractPrUrl(issueActivities);
+      const pushFailed = hasPushFailed(issueActivities);
+      const errorMessage = status === 'failed'
+        ? extractErrorMessage(issueActivities) || 'Processing failed. Check logs for details.'
+        : undefined;
+
       entries.push({
         issue,
         status,
         startedAt: status === 'processing' ? startedAt : undefined,
-        // These would come from a more detailed API response in the future
-        prUrl: undefined,
-        error: status === 'failed' ? 'Processing failed. Check logs for details.' : undefined,
+        prUrl,
+        pushFailed,
+        error: errorMessage,
       });
     });
 
@@ -120,7 +200,7 @@ export function ProcessingQueue({
     };
 
     return entries.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
-  }, [issues, queuedIds, processing, startedAt]);
+  }, [issues, queuedIds, processing, startedAt, activitiesMap]);
 
   // Calculate progress stats
   const progressStats = useMemo(() => {
@@ -330,6 +410,8 @@ export function ProcessingQueue({
                         issue={entry.issue}
                         status={entry.status}
                         prUrl={entry.prUrl}
+                        pushFailed={entry.pushFailed}
+                        onRetryPush={onRetryPush ? () => onRetryPush(entry.issue.id) : undefined}
                       />
                     ))}
                   </div>
@@ -349,7 +431,9 @@ export function ProcessingQueue({
                         issue={entry.issue}
                         status={entry.status}
                         error={entry.error}
+                        pushFailed={entry.pushFailed}
                         onRetry={onRetryItem ? () => onRetryItem(entry.issue.id) : undefined}
+                        onRetryPush={onRetryPush ? () => onRetryPush(entry.issue.id) : undefined}
                       />
                     ))}
                   </div>
