@@ -9,7 +9,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  CICheck,
   CIStatus,
   CIStatusResponse,
   CIFailure,
@@ -152,6 +151,19 @@ export function useCIStatus({
   );
 
   /**
+   * Stop polling for CI status.
+   * Defined first as it's used by refresh and startPolling.
+   */
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    isPollingRef.current = false;
+    setIsPolling(false);
+  }, []);
+
+  /**
    * Single refresh of CI status.
    */
   const refresh = useCallback(async () => {
@@ -176,7 +188,7 @@ export function useCIStatus({
     } finally {
       setIsLoading(false);
     }
-  }, [fetchStatus, processStatusUpdate, config.maxRetries]);
+  }, [fetchStatus, processStatusUpdate, config.maxRetries, stopPolling]);
 
   /**
    * Start polling for CI status.
@@ -203,19 +215,7 @@ export function useCIStatus({
 
       refresh();
     }, config.pollInterval);
-  }, [config.enabled, config.pollInterval, refresh, status?.overallStatus]);
-
-  /**
-   * Stop polling for CI status.
-   */
-  const stopPolling = useCallback(() => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-    isPollingRef.current = false;
-    setIsPolling(false);
-  }, []);
+  }, [config.enabled, config.pollInterval, refresh, status?.overallStatus, stopPolling]);
 
   /**
    * Trigger auto-fix for CI failures.

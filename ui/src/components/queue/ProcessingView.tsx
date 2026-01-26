@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState, useEffect } from 'react';
-import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, ProcessingOptions, CIStatusResponse } from '@/lib/types';
+import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, ProcessingOptions } from '@/lib/types';
 import { QueueProgress } from './QueueProgress';
 import { ActivityFeed } from './ActivityFeed';
 import { MetricsDisplay } from './MetricsDisplay';
@@ -76,7 +76,7 @@ export function ProcessingView({
     refresh: ciRefresh,
     triggerAutoFix: ciTriggerAutoFix,
     startPolling: ciStartPolling,
-    stopPolling: ciStopPolling,
+    stopPolling: _ciStopPolling,
   } = useCIStatus({
     owner: ciInfo?.owner ?? '',
     repo: ciInfo?.repo ?? '',

@@ -89,7 +89,7 @@ function CheckItem({ check }: { check: CICheck }) {
 /**
  * Failure details display.
  */
-function FailureDetails({ failure, owner, repo, onShowLogs }: {
+function FailureDetails({ failure, owner: _owner, repo: _repo, onShowLogs: _onShowLogs }: {
   failure: CIFailure;
   owner?: string;
   repo?: string;
