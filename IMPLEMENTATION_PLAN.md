@@ -613,6 +613,13 @@ All config variables added to `config.sh`:
 | ESLint configuration | Complete |
 | Integration tests (31 tests) | Complete |
 | E2E tests with Playwright (69 tests) | Complete |
+| Hook unit tests (538 tests total) | Complete |
+
+**Test Coverage Improvements (2026-01-26):**
+- Added comprehensive test coverage for critical streaming hooks (51 tests added):
+  - `useActivityFeed`: 27 tests added (previously 0% coverage)
+  - `useProcessingStream`: 24 tests added (previously 0% coverage)
+- Total test count across all suites: 638 tests
 
 ---
 
@@ -706,6 +713,7 @@ All config variables added to `config.sh`:
 | MetricsDisplay hardcoded | ✅ Fixed | Now connected to real SSE stream via metricsMap |
 | Activity types mismatch | ✅ Fixed | All activity types aligned with spec |
 | CLI mode/model passing | ✅ Fixed | meta-ralph.sh reads RALPH_MODE env var |
+| Missing test coverage for streaming hooks | ✅ Fixed | Added 51 tests for useActivityFeed and useProcessingStream |
 
 **Note:** Mode and model badges are now displayed in ProcessingQueue.tsx and ProcessingView.tsx headers (PRD-04/PRD-05 UI badges complete). TASK-4.1 and TASK-5.1 are fully implemented in ralph-engine.sh.
 
