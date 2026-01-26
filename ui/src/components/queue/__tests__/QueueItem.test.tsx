@@ -22,7 +22,7 @@ describe('QueueItem', () => {
     render(<QueueItem issue={mockIssue} status="pending" />);
 
     expect(screen.getByText('Test Security Issue')).toBeInTheDocument();
-    expect(screen.getByText('zeropath')).toBeInTheDocument();
+    expect(screen.getByText('ZeroPath')).toBeInTheDocument(); // ProviderBadge displays label, not raw provider
     expect(screen.getByText('HIGH')).toBeInTheDocument();
   });
 

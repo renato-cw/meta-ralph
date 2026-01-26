@@ -74,6 +74,13 @@ export RALPH_LOG_DIR="${RALPH_LOG_DIR:-.ralph-logs}"
 export RALPH_PARALLEL="${RALPH_PARALLEL:-1}"
 
 # ============================================================================
+# PROCESSING OPTIONS (PRD-04, PRD-05, PRD-06)
+# ============================================================================
+export RALPH_MODE="${RALPH_MODE:-build}"           # plan or build
+export RALPH_MODEL="${RALPH_MODEL:-sonnet}"        # sonnet or opus
+export RALPH_AUTO_PUSH="${RALPH_AUTO_PUSH:-true}"  # auto-push after fix
+
+# ============================================================================
 # PRIORITY WEIGHTS (0-100)
 # ============================================================================
 export PRIORITY_ZEROPATH_CRITICAL="${PRIORITY_ZEROPATH_CRITICAL:-100}"
@@ -141,6 +148,9 @@ config_loaded() {
     echo "  Codecov: ${CODECOV_OWNER:-}/${CODECOV_REPO:-(not configured)}"
     echo "  Max iterations: $RALPH_MAX_ITERATIONS"
     echo "  Base branch: $RALPH_BASE_BRANCH"
+    echo "  Mode: $RALPH_MODE"
+    echo "  Model: $RALPH_MODEL"
+    echo "  Auto-push: $RALPH_AUTO_PUSH"
 }
 
 # Show config if run directly

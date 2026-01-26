@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ExportDialog } from './ExportDialog';
-import type { Issue } from '@/lib/types';
+import { TagBadge } from '@/components/tags';
+import { useTags } from '@/hooks';
+import type { Issue, Tag } from '@/lib/types';
 
 interface BulkActionBarProps {
   selectedCount: number;
@@ -13,6 +15,8 @@ interface BulkActionBarProps {
   onSelectByFilter?: () => void;
   onClearSelection: () => void;
   className?: string;
+  /** Hide the bar (e.g., when processing queue panel is open) */
+  hidden?: boolean;
 }
 
 /**
@@ -28,10 +32,50 @@ export function BulkActionBar({
   onSelectByFilter,
   onClearSelection,
   className = '',
+  hidden = false,
 }: BulkActionBarProps) {
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const tagDropdownRef = useRef<HTMLDivElement>(null);
 
-  if (selectedCount === 0) {
+  const { tags, bulkAddTags, bulkRemoveTags, getIssueTags } = useTags();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target as Node)) {
+        setShowTagDropdown(false);
+      }
+    };
+
+    if (showTagDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTagDropdown]);
+
+  // Get common tags across all selected issues
+  const selectedIds = selectedIssues.map(i => i.id);
+  const getCommonTags = (): Tag[] => {
+    if (selectedIds.length === 0) return [];
+    const firstIssueTags = getIssueTags(selectedIds[0]);
+    return firstIssueTags.filter(tag =>
+      selectedIds.every(id => getIssueTags(id).some(t => t.id === tag.id))
+    );
+  };
+  const commonTags = getCommonTags();
+
+  const handleAddTag = (tagId: string) => {
+    bulkAddTags(selectedIds, [tagId]);
+  };
+
+  const handleRemoveTag = (tagId: string) => {
+    bulkRemoveTags(selectedIds, [tagId]);
+  };
+
+  if (selectedCount === 0 || hidden) {
     return null;
   }
 
@@ -66,6 +110,72 @@ export function BulkActionBar({
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            {/* Tag button with dropdown */}
+            <div className="relative" ref={tagDropdownRef}>
+              <button
+                onClick={() => setShowTagDropdown(!showTagDropdown)}
+                className="px-4 py-2 text-sm border border-[var(--border)] rounded-lg hover:bg-[var(--border)] transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                  />
+                </svg>
+                Tags
+                {commonTags.length > 0 && (
+                  <span className="text-xs bg-[var(--primary)] text-white px-1.5 rounded-full">
+                    {commonTags.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Tag dropdown */}
+              {showTagDropdown && (
+                <div className="absolute bottom-full mb-2 right-0 w-64 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg z-50 overflow-hidden">
+                  {/* Common tags section (if any) */}
+                  {commonTags.length > 0 && (
+                    <div className="p-3 border-b border-[var(--border)]">
+                      <p className="text-xs text-[var(--muted)] mb-2">Common tags (click to remove)</p>
+                      <div className="flex flex-wrap gap-1">
+                        {commonTags.map((tag) => (
+                          <TagBadge
+                            key={tag.id}
+                            tag={tag}
+                            size="sm"
+                            onRemove={() => handleRemoveTag(tag.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Available tags section */}
+                  <div className="p-3 max-h-48 overflow-y-auto">
+                    <p className="text-xs text-[var(--muted)] mb-2">Add tag to selected</p>
+                    {tags.length === 0 ? (
+                      <p className="text-sm text-[var(--muted)]">No tags created yet</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {tags
+                          .filter(tag => !commonTags.some(ct => ct.id === tag.id))
+                          .map((tag) => (
+                            <TagBadge
+                              key={tag.id}
+                              tag={tag}
+                              size="sm"
+                              onClick={() => handleAddTag(tag.id)}
+                            />
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Export button */}
             <button
               onClick={() => setShowExportDialog(true)}

@@ -3,7 +3,6 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { IssueTable } from '@/components/IssueTable';
 import { ProcessButton } from '@/components/ProcessButton';
-import { LogViewer } from '@/components/LogViewer';
 import { SearchBar } from '@/components/search/SearchBar';
 import { FilterBar } from '@/components/filters/FilterBar';
 import { BulkActionBar } from '@/components/actions/BulkActionBar';
@@ -11,9 +10,9 @@ import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
 import { KeyboardShortcuts } from '@/components/common';
 import { GroupedView, ViewToggle, SavedViews, SaveViewDialog } from '@/components/views';
 import { Dashboard } from '@/components/dashboard';
-import { ProcessingQueue } from '@/components/queue';
+import { ProcessingQueue, ProcessingIndicator } from '@/components/queue';
 import { HistoryView } from '@/components/history';
-import { useSavedViews, useHistory } from '@/hooks';
+import { useSavedViews, useHistory, useTags } from '@/hooks';
 import { useApp } from '@/contexts';
 import type { SortField, GroupBy, SavedView, HistoryEntry } from '@/lib/types';
 
@@ -67,6 +66,7 @@ export default function Home() {
     toggleProvider,
     toggleSeverity,
     toggleStatus,
+    toggleTag,
     setPriorityRange,
     hasActiveFilters,
     activeFilterCount,
@@ -81,6 +81,16 @@ export default function Home() {
     expandAllGroups,
     collapsedCount,
   } = useApp();
+
+  // Tags hook - provides tag management functionality
+  const {
+    tags,
+    getIssueTags,
+    addTagToIssue,
+    removeTagFromIssue,
+    bulkAddTags,
+    bulkRemoveTags,
+  } = useTags();
 
   // Refs for keyboard navigation
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -330,11 +340,13 @@ export default function Home() {
         <FilterBar
           filters={filters}
           availableProviders={availableProviders}
+          availableTags={tags.map(t => t.name)}
           onFilterChange={setFilters}
           onClearFilters={clearFilters}
           onToggleProvider={toggleProvider}
           onToggleSeverity={toggleSeverity}
           onToggleStatus={toggleStatus}
+          onToggleTag={toggleTag}
           onPriorityRangeChange={setPriorityRange}
           hasActiveFilters={hasActiveFilters}
           activeFilterCount={activeFilterCount}
@@ -412,12 +424,7 @@ export default function Home() {
         )}
       </div>
 
-      <LogViewer
-        logs={processing.logs}
-        isVisible={processing.isProcessing || processing.logs.length > 0}
-      />
-
-      {/* Bulk action bar - shows when items are selected */}
+      {/* Bulk action bar - shows when items are selected, hides when queue panel is open */}
       <BulkActionBar
         selectedCount={selectedIds.size}
         selectedIssues={processedIssues.filter((i) => selectedIds.has(i.id))}
@@ -425,6 +432,7 @@ export default function Home() {
         isProcessing={processing.isProcessing}
         onProcess={handleProcess}
         onClearSelection={handleDeselectAll}
+        hidden={isQueueOpen}
       />
 
       {/* Issue detail panel */}
@@ -445,6 +453,13 @@ export default function Home() {
         queuedIds={queuedIds}
         logs={processing.logs}
         onRetryItem={handleRetryItem}
+      />
+
+      {/* Floating processing indicator - shows when processing but queue panel is closed */}
+      <ProcessingIndicator
+        processing={processing}
+        isQueueOpen={isQueueOpen}
+        onOpenQueue={handleToggleQueue}
       />
 
       {/* Save view dialog */}

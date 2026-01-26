@@ -1,6 +1,9 @@
 'use client';
 
 import type { Issue } from '@/lib/types';
+import { ProviderBadge } from '@/components/common/ProviderBadge';
+import { TagBadge } from '@/components/tags';
+import { useTags } from '@/hooks';
 
 interface IssueRowProps {
   issue: Issue;
@@ -23,6 +26,8 @@ export function IssueRow({
   hideProvider = false,
   hideSeverity = false,
 }: IssueRowProps) {
+  const { getIssueTags } = useTags();
+  const issueTags = getIssueTags(issue.id);
   const severityClass = `badge-${issue.severity.toLowerCase()}`;
 
   const priorityColor =
@@ -60,9 +65,7 @@ export function IssueRow({
       <td className="p-3 text-[var(--muted)]">{index + 1}</td>
       {!hideProvider && (
         <td className="p-3">
-          <span className="px-2 py-1 text-xs rounded bg-[var(--card)] text-[var(--foreground)]">
-            {issue.provider}
-          </span>
+          <ProviderBadge provider={issue.provider} />
         </td>
       )}
       <td className="p-3">
@@ -78,8 +81,20 @@ export function IssueRow({
         </td>
       )}
       <td className="p-3 text-center">{issue.count}</td>
-      <td className="p-3 max-w-md truncate" title={issue.title}>
-        {issue.title}
+      <td className="p-3 max-w-md">
+        <div className="flex items-center gap-2">
+          <span className="truncate" title={issue.title}>{issue.title}</span>
+          {issueTags.length > 0 && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {issueTags.slice(0, 3).map((tag) => (
+                <TagBadge key={tag.id} tag={tag} size="sm" />
+              ))}
+              {issueTags.length > 3 && (
+                <span className="text-xs text-[var(--muted)]">+{issueTags.length - 3}</span>
+              )}
+            </div>
+          )}
+        </div>
       </td>
       <td className="p-3">
         {issue.permalink && (

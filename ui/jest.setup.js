@@ -50,6 +50,9 @@ Object.defineProperty(window, 'history', {
 // Mock fetch
 global.fetch = jest.fn();
 
+// Mock scrollIntoView (not supported in jsdom)
+Element.prototype.scrollIntoView = jest.fn();
+
 // Reset mocks before each test
 beforeEach(() => {
   jest.clearAllMocks();

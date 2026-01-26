@@ -34,6 +34,11 @@ BASE_BRANCH="${RALPH_BASE_BRANCH:-main}"
 PARALLEL=1
 VERBOSE=false
 
+# Processing options (PRD-04, PRD-05, PRD-06)
+MODE="${RALPH_MODE:-build}"
+MODEL="${RALPH_MODEL:-sonnet}"
+AUTO_PUSH="${RALPH_AUTO_PUSH:-true}"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -91,6 +96,30 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        --mode)
+            MODE="$2"
+            if [[ "$MODE" != "plan" && "$MODE" != "build" ]]; then
+                echo -e "${RED}Error: --mode must be 'plan' or 'build'${NC}"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --model)
+            MODEL="$2"
+            if [[ "$MODEL" != "sonnet" && "$MODEL" != "opus" ]]; then
+                echo -e "${RED}Error: --model must be 'sonnet' or 'opus'${NC}"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --auto-push)
+            AUTO_PUSH="$2"
+            if [[ "$AUTO_PUSH" != "true" && "$AUTO_PUSH" != "false" ]]; then
+                echo -e "${RED}Error: --auto-push must be 'true' or 'false'${NC}"
+                exit 1
+            fi
+            shift 2
+            ;;
         --list-providers)
             echo "Available providers:"
             list_providers | while read p; do echo "  - $p"; done
@@ -114,6 +143,9 @@ Options:
   --base-branch BRANCH   Base branch for PRs (default: main)
   --parallel N           Process N issues in parallel (default: 1)
   --verbose, -v          Verbose output
+  --mode MODE            Processing mode: plan or build (default: build)
+  --model MODEL          Claude model: sonnet or opus (default: sonnet)
+  --auto-push BOOL       Auto-push after fix: true or false (default: true)
   --list-providers       List available providers
   --help, -h             Show this help
 
@@ -137,9 +169,10 @@ EOF
     esac
 done
 
-# Banner
-echo -e "${MAGENTA}"
-cat << 'EOF'
+# Banner (skip in JSON mode for clean output)
+if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo -e "${MAGENTA}"
+    cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                                                                      ║
 ║   ███╗   ███╗███████╗████████╗ █████╗       ██████╗  █████╗ ██╗     ║
@@ -153,24 +186,29 @@ cat << 'EOF'
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 EOF
-echo -e "${NC}"
+    echo -e "${NC}"
 
-echo -e "${CYAN}Configuration:${NC}"
-echo -e "  Providers: $PROVIDERS"
-echo -e "  Max Iterations: $MAX_ITERATIONS"
-echo -e "  Max Issues: $([ "$MAX_ISSUES" -eq 0 ] && echo "unlimited" || echo "$MAX_ISSUES")"
-echo -e "  Offset: $OFFSET"
-echo -e "  Parallel: $PARALLEL"
-echo -e "  Dry Run: $DRY_RUN"
-echo -e "  Base Branch: $BASE_BRANCH"
-echo ""
+    echo -e "${CYAN}Configuration:${NC}"
+    echo -e "  Providers: $PROVIDERS"
+    echo -e "  Max Iterations: $MAX_ITERATIONS"
+    echo -e "  Max Issues: $([ "$MAX_ISSUES" -eq 0 ] && echo "unlimited" || echo "$MAX_ISSUES")"
+    echo -e "  Offset: $OFFSET"
+    echo -e "  Parallel: $PARALLEL"
+    echo -e "  Dry Run: $DRY_RUN"
+    echo -e "  Base Branch: $BASE_BRANCH"
+    echo -e "  Mode: $MODE"
+    echo -e "  Model: $MODEL"
+    echo -e "  Auto-Push: $AUTO_PUSH"
+    echo ""
+fi
 
 # Change to repo root
 cd "$REPO_ROOT"
 
 # Verify git repo
 if [[ ! -d ".git" ]]; then
-    echo -e "${RED}Error: Not in a git repository${NC}"
+    [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${RED}Error: Not in a git repository${NC}"
+    [[ "$JSON_OUTPUT" == "true" ]] && echo "[]"
     exit 1
 fi
 
@@ -178,10 +216,12 @@ fi
 # FETCH ISSUES FROM ALL PROVIDERS
 # ============================================================================
 
-echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Phase 1: Fetching issues from providers${NC}"
-echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
-echo ""
+if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}  Phase 1: Fetching issues from providers${NC}"
+    echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+fi
 
 all_issues="[]"
 IFS=',' read -ra PROVIDER_LIST <<< "$PROVIDERS"
@@ -189,17 +229,17 @@ IFS=',' read -ra PROVIDER_LIST <<< "$PROVIDERS"
 for provider_name in "${PROVIDER_LIST[@]}"; do
     provider_name=$(echo "$provider_name" | xargs)  # Trim whitespace
 
-    echo -e "${CYAN}📡 Fetching from $provider_name...${NC}"
+    [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${CYAN}📡 Fetching from $provider_name...${NC}"
 
     if ! load_provider "$provider_name"; then
-        echo -e "${YELLOW}⚠️  Provider '$provider_name' not available, skipping${NC}"
+        [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${YELLOW}⚠️  Provider '$provider_name' not available, skipping${NC}"
         continue
     fi
 
     provider_issues=$(provider_fetch 2>/dev/null || echo "[]")
     issue_count=$(echo "$provider_issues" | jq 'length')
 
-    echo -e "${GREEN}   Found $issue_count issues${NC}"
+    [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${GREEN}   Found $issue_count issues${NC}"
 
     if [[ "$issue_count" -gt 0 ]]; then
         all_issues=$(echo "$all_issues" "$provider_issues" | jq -s 'add')
@@ -210,30 +250,32 @@ done
 all_issues=$(echo "$all_issues" | sort_by_priority)
 
 total_issues=$(echo "$all_issues" | jq 'length')
-echo ""
-echo -e "${WHITE}Total issues found: $total_issues${NC}"
-echo ""
+if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo ""
+    echo -e "${WHITE}Total issues found: $total_issues${NC}"
+    echo ""
+fi
 
 # Apply offset
 if [[ "$OFFSET" -gt 0 ]]; then
     all_issues=$(echo "$all_issues" | jq ".[$OFFSET:]")
-    echo -e "${CYAN}Skipping first $OFFSET issues${NC}"
+    [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${CYAN}Skipping first $OFFSET issues${NC}"
 fi
 
 # Apply limit
 if [[ "$MAX_ISSUES" -gt 0 ]]; then
     all_issues=$(echo "$all_issues" | jq ".[:$MAX_ISSUES]")
-    echo -e "${CYAN}Limiting to $MAX_ISSUES issues${NC}"
+    [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${CYAN}Limiting to $MAX_ISSUES issues${NC}"
 fi
 
 # Filter single issue if specified
 if [[ -n "$SINGLE_ISSUE" ]]; then
     all_issues=$(echo "$all_issues" | jq "[.[] | select(.id == \"$SINGLE_ISSUE\" or .short_id == \"$SINGLE_ISSUE\")]")
     if [[ "$(echo "$all_issues" | jq 'length')" -eq 0 ]]; then
-        echo -e "${RED}Issue $SINGLE_ISSUE not found${NC}"
+        [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${RED}Issue $SINGLE_ISSUE not found${NC}"
         exit 1
     fi
-    echo -e "${YELLOW}Processing single issue: $SINGLE_ISSUE${NC}"
+    [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${YELLOW}Processing single issue: $SINGLE_ISSUE${NC}"
 fi
 
 # Filter by specific IDs if --only-ids specified
@@ -241,7 +283,7 @@ if [[ -n "$ONLY_IDS" ]]; then
     IFS=',' read -ra ID_LIST <<< "$ONLY_IDS"
     id_filter=$(printf '%s\n' "${ID_LIST[@]}" | jq -R . | jq -s .)
     all_issues=$(echo "$all_issues" | jq --argjson ids "$id_filter" '[.[] | select(.id as $id | $ids | any(. == $id))]')
-    echo -e "${YELLOW}Filtering to ${#ID_LIST[@]} specific issue(s)${NC}"
+    [[ "$JSON_OUTPUT" != "true" ]] && echo -e "${YELLOW}Filtering to ${#ID_LIST[@]} specific issue(s)${NC}"
 fi
 
 issue_count=$(echo "$all_issues" | jq 'length')
@@ -348,7 +390,7 @@ for (( idx=0; idx<issue_count; idx++ )); do
     mkdir -p "$WORK_DIR"
 
     # Process the issue
-    if process_issue "$issue" "$provider" "$WORK_DIR" "$BASE_BRANCH" "$MAX_ITERATIONS"; then
+    if process_issue "$issue" "$provider" "$WORK_DIR" "$BASE_BRANCH" "$MAX_ITERATIONS" "$MODE" "$MODEL" "$AUTO_PUSH"; then
         ((fixed++)) || true
     else
         ((failed++)) || true

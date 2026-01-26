@@ -79,6 +79,7 @@ export interface AppContextType {
   toggleProvider: (provider: string) => void;
   toggleSeverity: (severity: Severity) => void;
   toggleStatus: (status: IssueStatus) => void;
+  toggleTag: (tag: string) => void;
   setPriorityRange: (min: number, max: number) => void;
   filterIssues: (issues: Issue[]) => Issue[];
   hasActiveFilters: boolean;
@@ -162,6 +163,7 @@ export function AppProvider({ children }: AppProviderProps) {
     toggleProvider,
     toggleSeverity,
     toggleStatus,
+    toggleTag,
     setPriorityRange,
     filterIssues,
     hasActiveFilters,
@@ -372,6 +374,7 @@ export function AppProvider({ children }: AppProviderProps) {
     toggleProvider,
     toggleSeverity,
     toggleStatus,
+    toggleTag,
     setPriorityRange,
     filterIssues,
     hasActiveFilters,
@@ -425,6 +428,7 @@ export function AppProvider({ children }: AppProviderProps) {
     toggleProvider,
     toggleSeverity,
     toggleStatus,
+    toggleTag,
     setPriorityRange,
     filterIssues,
     hasActiveFilters,
@@ -554,6 +558,7 @@ export function useAppFilters() {
     toggleProvider,
     toggleSeverity,
     toggleStatus,
+    toggleTag,
     setPriorityRange,
     filterIssues,
     hasActiveFilters,
@@ -566,6 +571,7 @@ export function useAppFilters() {
     toggleProvider,
     toggleSeverity,
     toggleStatus,
+    toggleTag,
     setPriorityRange,
     filterIssues,
     hasActiveFilters,
