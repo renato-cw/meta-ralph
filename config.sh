@@ -74,6 +74,15 @@ export RALPH_LOG_DIR="${RALPH_LOG_DIR:-.ralph-logs}"
 export RALPH_PARALLEL="${RALPH_PARALLEL:-1}"
 
 # ============================================================================
+# TARGET REPOSITORY (optional - for working on a different repo)
+# ============================================================================
+# If set, Ralph will cd to this directory before processing issues
+export TARGET_REPO="${TARGET_REPO:-}"
+
+# Force new branch with timestamp for each issue (avoids branch conflicts)
+export RALPH_FORCE_NEW_BRANCH="${RALPH_FORCE_NEW_BRANCH:-true}"
+
+# ============================================================================
 # PRIORITY WEIGHTS (0-100)
 # ============================================================================
 export PRIORITY_ZEROPATH_CRITICAL="${PRIORITY_ZEROPATH_CRITICAL:-100}"

@@ -39,12 +39,18 @@ export async function fetchIssues(): Promise<Issue[]> {
       }
 
       try {
+        // Strip ANSI escape codes before parsing
+        // eslint-disable-next-line no-control-regex
+        const cleanOutput = stdout.replace(/\x1b\[[0-9;]*m/g, '');
+
         // Find JSON array in output (skip any text before it)
-        const jsonMatch = stdout.match(/\[[\s\S]*\]/);
+        // Use a more specific pattern that starts with [ followed by { for an array of objects
+        const jsonMatch = cleanOutput.match(/\[\s*\{[\s\S]*\}\s*\]/);
         if (jsonMatch) {
           const issues = JSON.parse(jsonMatch[0]) as Issue[];
           resolve(issues);
         } else {
+          // No JSON array found, return empty
           resolve([]);
         }
       } catch (e) {

@@ -11,7 +11,7 @@ import { IssueDetailPanel } from '@/components/details/IssueDetailPanel';
 import { KeyboardShortcuts } from '@/components/common';
 import { GroupedView, ViewToggle, SavedViews, SaveViewDialog } from '@/components/views';
 import { Dashboard } from '@/components/dashboard';
-import { ProcessingQueue } from '@/components/queue';
+import { ProcessingQueue, ProcessingView } from '@/components/queue';
 import { HistoryView } from '@/components/history';
 import { useSavedViews, useHistory } from '@/hooks';
 import { useApp } from '@/contexts';
@@ -98,6 +98,9 @@ export default function Home() {
   // History panel state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
+  // Processing view state (full-screen dedicated view)
+  const [isProcessingViewOpen, setIsProcessingViewOpen] = useState(false);
+
   // History hook
   const {
     entries: historyEntries,
@@ -146,7 +149,7 @@ export default function Home() {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
     setQueuedIds(ids);
-    setIsQueueOpen(true);
+    setIsProcessingViewOpen(true); // Open full-screen processing view
     await processIssues(ids);
   }, [selectedIds, processIssues]);
 
@@ -162,6 +165,25 @@ export default function Home() {
     setQueuedIds(prev => [...prev, id]);
     await processIssues([id]);
   }, [processIssues]);
+
+  const handleRemoveFromQueue = useCallback((id: string) => {
+    setQueuedIds(prev => prev.filter(qid => qid !== id));
+  }, []);
+
+  const handleCancelAll = useCallback(() => {
+    // Remove all pending items (keep completed and failed for history)
+    setQueuedIds(prev => prev.filter(id =>
+      processing.completed.includes(id) || processing.failed.includes(id)
+    ));
+  }, [processing.completed, processing.failed]);
+
+  const handleOpenProcessingView = useCallback(() => {
+    setIsProcessingViewOpen(true);
+  }, []);
+
+  const handleCloseProcessingView = useCallback(() => {
+    setIsProcessingViewOpen(false);
+  }, []);
 
   const handleToggleFilters = useCallback(() => {
     setFiltersExpanded((prev) => !prev);
@@ -258,6 +280,28 @@ export default function Home() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {/* Processing View Button - shows when items are queued */}
+          {queuedIds.length > 0 && (
+            <button
+              onClick={handleOpenProcessingView}
+              className="px-4 py-2 text-sm border border-blue-500/50 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-colors flex items-center gap-2"
+              title="Open processing view"
+            >
+              {processing.isProcessing && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+              )}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Processing
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/30">
+                {queuedIds.length}
+              </span>
+            </button>
+          )}
           <button
             onClick={handleToggleHistory}
             className="px-4 py-2 text-sm border border-[var(--border)] rounded hover:bg-[var(--card)] transition-colors flex items-center gap-2"
@@ -472,6 +516,19 @@ export default function Home() {
         onClearFailed={clearFailedHistory}
         stats={historyStats}
         availableProviders={availableProviders}
+      />
+
+      {/* Full-screen Processing View */}
+      <ProcessingView
+        isOpen={isProcessingViewOpen}
+        onClose={handleCloseProcessingView}
+        processing={processing}
+        issues={issues}
+        queuedIds={queuedIds}
+        logs={processing.logs}
+        onRetryItem={handleRetryItem}
+        onRemoveItem={handleRemoveFromQueue}
+        onCancelAll={handleCancelAll}
       />
     </div>
   );

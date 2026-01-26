@@ -22,7 +22,7 @@ source "$SCRIPT_DIR/lib/priority.sh"
 source "$SCRIPT_DIR/lib/ralph-engine.sh"
 
 # Defaults
-PROVIDERS="zeropath,sentry"
+PROVIDERS="zeropath,sentry,codecov"
 MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-10}"
 MAX_ISSUES=0
 OFFSET=0
