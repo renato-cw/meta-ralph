@@ -245,7 +245,7 @@ function handleIgnore(
  */
 async function handleProcess(
   ids: string[],
-  payload?: BulkActionRequest['payload']
+  _payload?: BulkActionRequest['payload']
 ): Promise<NextResponse<BulkActionResponse>> {
   // Check for already processing issues
   const sessions = getActiveSessions();
@@ -266,7 +266,8 @@ async function handleProcess(
     );
   }
 
-  // Build processing options from payload
+  // Build processing options from payload (reserved for future use)
+  // _payload could contain processing options in an extended BulkActionRequest
   const options: Partial<ProcessingOptions> = {};
 
   // Options could be passed via an extended payload in the future
