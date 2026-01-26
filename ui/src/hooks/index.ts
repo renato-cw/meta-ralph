@@ -19,3 +19,10 @@ export {
   type UseProcessingStreamOptions,
   type UseProcessingStreamReturn,
 } from './useProcessingStream';
+export {
+  useCIStatus,
+  computeOverallStatus,
+  type CIPollingState,
+  type UseCIStatusOptions,
+  type UseCIStatusReturn,
+} from './useCIStatus';

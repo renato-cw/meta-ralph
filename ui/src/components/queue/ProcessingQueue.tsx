@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import type { Issue, ProcessingStatus, Activity, ExecutionMetrics } from '@/lib/types';
+import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, CIStatus, CICheck } from '@/lib/types';
 import { QueueItem } from './QueueItem';
 import { QueueProgress } from './QueueProgress';
 import { ActivityFeed } from './ActivityFeed';
+import { CIStatusPanel } from './CIStatusPanel';
 import { parseLogs } from '@/lib/events';
+import { CIPollingState } from '@/hooks/useCIStatus';
 
 /**
  * View mode for the processing output section.
@@ -37,6 +39,26 @@ interface ProcessingQueueProps {
   onClearCompleted?: () => void;
   /** Maximum iterations for metrics display */
   maxIterations?: number;
+  /** CI/CD awareness props */
+  ciStatus?: CIStatus | null;
+  /** CI polling state */
+  ciPollingState?: CIPollingState;
+  /** CI error message */
+  ciError?: string | null;
+  /** Time until next CI poll */
+  ciNextPollIn?: number;
+  /** Number of CI polls made */
+  ciPollCount?: number;
+  /** Whether CI awareness is enabled */
+  ciEnabled?: boolean;
+  /** Whether auto-fix CI is enabled */
+  autoFixCiEnabled?: boolean;
+  /** Callback to refresh CI status */
+  onCiRefresh?: () => void;
+  /** Callback to trigger auto-fix */
+  onCiAutoFix?: () => void;
+  /** Callback when viewing CI check details */
+  onCiViewDetails?: (check: CICheck) => void;
 }
 
 type QueueItemStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -67,6 +89,16 @@ export function ProcessingQueue({
   onRetryItem,
   onClearCompleted,
   maxIterations = 10,
+  ciStatus,
+  ciPollingState = 'idle',
+  ciError,
+  ciNextPollIn = 0,
+  ciPollCount = 0,
+  ciEnabled = false,
+  autoFixCiEnabled = false,
+  onCiRefresh,
+  onCiAutoFix,
+  onCiViewDetails,
 }: ProcessingQueueProps) {
   // Track when processing started for ETA calculation
   const [startedAt, setStartedAt] = useState<string | undefined>();
@@ -381,6 +413,24 @@ export function ProcessingQueue({
             >
               Clear Completed & Failed
             </button>
+          </div>
+        )}
+
+        {/* CI/CD Status Panel */}
+        {ciEnabled && (
+          <div className="flex-shrink-0 px-4 py-3 border-t border-[var(--border)]">
+            <CIStatusPanel
+              status={ciStatus ?? null}
+              pollingState={ciPollingState}
+              error={ciError ?? null}
+              nextPollIn={ciNextPollIn}
+              pollCount={ciPollCount}
+              isEnabled={ciEnabled}
+              autoFixEnabled={autoFixCiEnabled}
+              onRefresh={onCiRefresh ?? (() => {})}
+              onAutoFix={onCiAutoFix}
+              onViewDetails={onCiViewDetails}
+            />
           </div>
         )}
 

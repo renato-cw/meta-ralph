@@ -563,3 +563,117 @@ export const SEVERITY_COLORS: Record<Severity, { bg: string; text: string }> = {
   LOW: { bg: 'bg-green-900/50', text: 'text-green-300' },
   INFO: { bg: 'bg-blue-900/50', text: 'text-blue-300' },
 };
+
+// ============================================================================
+// CI/CD Types (PRD-07)
+// ============================================================================
+
+/**
+ * Status of a CI check run.
+ */
+export type CICheckStatus = 'queued' | 'in_progress' | 'completed';
+
+/**
+ * Conclusion of a completed CI check run.
+ */
+export type CICheckConclusion = 'success' | 'failure' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required' | 'neutral';
+
+/**
+ * A single CI check run from GitHub Actions.
+ */
+export interface CICheck {
+  id: string;
+  name: string;
+  status: CICheckStatus;
+  conclusion: CICheckConclusion | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  detailsUrl: string;
+  output?: {
+    title: string | null;
+    summary: string | null;
+    text: string | null;
+  };
+}
+
+/**
+ * Overall CI status for a commit/branch.
+ */
+export type CIOverallStatus = 'pending' | 'success' | 'failure' | 'mixed' | 'running';
+
+/**
+ * Complete CI status with all check runs.
+ */
+export interface CIStatus {
+  sha: string;
+  branch: string;
+  checks: CICheck[];
+  overallStatus: CIOverallStatus;
+  lastPolledAt: string;
+}
+
+/**
+ * CI polling configuration.
+ */
+export interface CIPollingConfig {
+  enabled: boolean;
+  intervalMs: number;
+  maxWaitMs: number;
+  maxRetries: number;
+}
+
+/**
+ * Default CI polling configuration.
+ */
+export const DEFAULT_CI_POLLING_CONFIG: CIPollingConfig = {
+  enabled: true,
+  intervalMs: 30000, // 30 seconds as per PRD-07
+  maxWaitMs: 600000, // 10 minutes max wait
+  maxRetries: 20, // 20 retries at 30s = 10 minutes
+};
+
+/**
+ * CI status icons for display.
+ */
+export const CI_STATUS_ICONS: Record<CIOverallStatus | CICheckStatus | 'error', string> = {
+  pending: '🟡',
+  queued: '🟡',
+  in_progress: '⏳',
+  running: '⏳',
+  success: '✅',
+  failure: '❌',
+  mixed: '🟠',
+  completed: '✅', // completion icon, actual status determined by conclusion
+  error: '⚠️',
+};
+
+/**
+ * CI status colors for styling.
+ */
+export const CI_STATUS_COLORS: Record<CIOverallStatus, { bg: string; text: string; border: string }> = {
+  pending: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-600' },
+  running: { bg: 'bg-blue-900/30', text: 'text-blue-400', border: 'border-blue-600' },
+  success: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-600' },
+  failure: { bg: 'bg-red-900/30', text: 'text-red-400', border: 'border-red-600' },
+  mixed: { bg: 'bg-orange-900/30', text: 'text-orange-400', border: 'border-orange-600' },
+};
+
+/**
+ * Request for triggering CI auto-fix.
+ */
+export interface CIFixRequest {
+  issueId: string;
+  sha: string;
+  branch: string;
+  failedChecks: string[];
+}
+
+/**
+ * Response from CI fix endpoint.
+ */
+export interface CIFixResponse {
+  success: boolean;
+  message: string;
+  fixAttempted: boolean;
+  newCommitSha?: string;
+}

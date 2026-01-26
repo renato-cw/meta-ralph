@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProcessingOptionsPanel, ProcessingOptionsSummary } from '../ProcessingOptionsPanel';
-import { DEFAULT_PROCESSING_OPTIONS, PROCESSING_PRESETS } from '@/lib/types';
+import { DEFAULT_PROCESSING_OPTIONS, PROCESSING_PRESETS, Severity } from '@/lib/types';
 import type { UseProcessingOptionsReturn } from '@/hooks/useProcessingOptions';
 
 // Create a mock processing options return value
@@ -34,7 +34,7 @@ describe('ProcessingOptionsPanel', () => {
     onClose: jest.fn(),
     onStartProcessing: jest.fn(),
     issueCount: 3,
-    issueSeverities: ['HIGH', 'MEDIUM', 'LOW'] as const,
+    issueSeverities: ['HIGH', 'MEDIUM', 'LOW'] as Severity[],
   };
 
   beforeEach(() => {

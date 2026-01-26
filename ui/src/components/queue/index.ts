@@ -5,3 +5,4 @@ export { ProcessingIndicator } from './ProcessingIndicator';
 export { ActivityItem } from './ActivityItem';
 export { ActivityFeed } from './ActivityFeed';
 export { MetricsDisplay } from './MetricsDisplay';
+export { CIStatusPanel, type CIStatusPanelProps } from './CIStatusPanel';
