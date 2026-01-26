@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import type { Issue, ProcessingStatus, Activity, ExecutionMetrics } from '@/lib/types';
+import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, ProcessingOptions } from '@/lib/types';
 import { QueueProgress } from './QueueProgress';
 import { ActivityFeed } from './ActivityFeed';
 import { MetricsDisplay } from './MetricsDisplay';
@@ -15,6 +15,7 @@ interface ProcessingViewProps {
   issues: Issue[];
   queuedIds: string[];
   logs: string[];
+  processingOptions?: ProcessingOptions;
   onRetryItem: (id: string) => void;
   onRemoveItem?: (id: string) => void;
   onCancelAll?: () => void;
@@ -32,6 +33,7 @@ export function ProcessingView({
   issues,
   queuedIds,
   logs: _logs,
+  processingOptions,
   onRetryItem,
   onRemoveItem,
   onCancelAll,
@@ -150,6 +152,34 @@ export function ProcessingView({
             )}
             Processing View
           </h1>
+          {/* Mode Badge (Plan/Build) */}
+          {processingOptions && (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                processingOptions.mode === 'plan'
+                  ? 'bg-blue-500/20 text-blue-400'
+                  : 'bg-green-500/20 text-green-400'
+              }`}
+              title={processingOptions.mode === 'plan' ? 'Plan mode: Analysis only' : 'Build mode: Implement fix'}
+            >
+              {processingOptions.mode === 'plan' ? '📋' : '🔨'}
+              {processingOptions.mode === 'plan' ? 'Plan' : 'Build'}
+            </span>
+          )}
+          {/* Model Badge (Sonnet/Opus) */}
+          {processingOptions && (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                processingOptions.model === 'opus'
+                  ? 'bg-purple-500/20 text-purple-400'
+                  : 'bg-yellow-500/20 text-yellow-400'
+              }`}
+              title={processingOptions.model === 'opus' ? 'Opus: Most capable' : 'Sonnet: Fast & efficient'}
+            >
+              {processingOptions.model === 'opus' ? '🧠' : '⚡'}
+              {processingOptions.model === 'opus' ? 'Opus' : 'Sonnet'}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4">
           {pendingItems.length > 0 && onCancelAll && (

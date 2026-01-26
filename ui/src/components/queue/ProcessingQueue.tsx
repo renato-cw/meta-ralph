@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useMemo, useState } from 'react';
-import type { Issue, ProcessingStatus } from '@/lib/types';
+import type { Issue, ProcessingStatus, ProcessingOptions } from '@/lib/types';
 import { QueueItem } from './QueueItem';
 import { QueueProgress } from './QueueProgress';
 
@@ -18,6 +18,8 @@ interface ProcessingQueueProps {
   queuedIds: string[];
   /** Processing logs */
   logs: string[];
+  /** Current processing options (mode, model, etc.) */
+  processingOptions?: ProcessingOptions;
   /** Whether the queue is paused (for future use) */
   isPaused?: boolean;
   /** Callback to toggle pause state (for future use) */
@@ -52,6 +54,7 @@ export function ProcessingQueue({
   issues,
   queuedIds,
   logs,
+  processingOptions,
   isPaused = false,
   onTogglePause,
   onCancelItem,
@@ -183,6 +186,34 @@ export function ProcessingQueue({
                 <span className="flex items-center gap-1.5 text-xs text-blue-400">
                   <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                   Active
+                </span>
+              )}
+              {/* Mode Badge (Plan/Build) */}
+              {processingOptions && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                    processingOptions.mode === 'plan'
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-green-500/20 text-green-400'
+                  }`}
+                  title={processingOptions.mode === 'plan' ? 'Plan mode: Analysis only' : 'Build mode: Implement fix'}
+                >
+                  {processingOptions.mode === 'plan' ? '📋' : '🔨'}
+                  {processingOptions.mode === 'plan' ? 'Plan' : 'Build'}
+                </span>
+              )}
+              {/* Model Badge (Sonnet/Opus) */}
+              {processingOptions && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                    processingOptions.model === 'opus'
+                      ? 'bg-purple-500/20 text-purple-400'
+                      : 'bg-yellow-500/20 text-yellow-400'
+                  }`}
+                  title={processingOptions.model === 'opus' ? 'Opus: Most capable' : 'Sonnet: Fast & efficient'}
+                >
+                  {processingOptions.model === 'opus' ? '🧠' : '⚡'}
+                  {processingOptions.model === 'opus' ? 'Opus' : 'Sonnet'}
                 </span>
               )}
             </div>

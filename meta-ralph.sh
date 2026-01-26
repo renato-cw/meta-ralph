@@ -347,8 +347,13 @@ for (( idx=0; idx<issue_count; idx++ )); do
     WORK_DIR="$LOG_DIR/$provider-$issue_id"
     mkdir -p "$WORK_DIR"
 
-    # Process the issue
-    if process_issue "$issue" "$provider" "$WORK_DIR" "$BASE_BRANCH" "$MAX_ITERATIONS"; then
+    # Read processing options from environment variables (set by UI)
+    local mode="${RALPH_MODE:-build}"
+    local model="${RALPH_MODEL:-sonnet}"
+    local auto_push="${RALPH_AUTO_PUSH:-true}"
+
+    # Process the issue with all options
+    if process_issue "$issue" "$provider" "$WORK_DIR" "$BASE_BRANCH" "$MAX_ITERATIONS" "$mode" "$model" "$auto_push"; then
         ((fixed++)) || true
     else
         ((failed++)) || true

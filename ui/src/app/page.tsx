@@ -92,6 +92,7 @@ export default function Home() {
   // Queue panel state
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [queuedIds, setQueuedIds] = useState<string[]>([]);
+  const [currentProcessingOptions, setCurrentProcessingOptions] = useState<ProcessingOptions | undefined>();
 
   // Save view dialog state
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -161,6 +162,7 @@ export default function Home() {
     const ids = Array.from(selectedIds);
     setIsOptionsOpen(false);
     setQueuedIds(ids);
+    setCurrentProcessingOptions(options); // Store options for display in queue
     setIsProcessingViewOpen(true); // Open full-screen processing view
     await processIssues(ids, options);
   }, [selectedIds, processIssues]);
@@ -500,6 +502,7 @@ export default function Home() {
         issues={issues}
         queuedIds={queuedIds}
         logs={processing.logs}
+        processingOptions={currentProcessingOptions}
         onRetryItem={handleRetryItem}
       />
 
@@ -538,6 +541,7 @@ export default function Home() {
         issues={issues}
         queuedIds={queuedIds}
         logs={processing.logs}
+        processingOptions={currentProcessingOptions}
         onRetryItem={handleRetryItem}
         onRemoveItem={handleRemoveFromQueue}
         onCancelAll={handleCancelAll}
