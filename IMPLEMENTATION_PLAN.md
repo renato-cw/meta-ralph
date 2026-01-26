@@ -278,16 +278,19 @@ All implemented in `ui/src/lib/types.ts` instead of separate file:
 
 ## TIER 4: Model Selection (PRD-05)
 
-### TASK-4.1: Add Model Flag to ralph-engine.sh
+### TASK-4.1: Add Model Flag to ralph-engine.sh ✅ COMPLETE
 **Priority:** P1 | **Effort:** 1 hour | **File:** `lib/ralph-engine.sh`
-**Dependencies:** TASK-3.1
+**Dependencies:** TASK-3.1 | **Completed:** 2026-01-26
 
-**Current State:** No model parameter. Claude CLI called without model specification (line 58).
+**Implementation:**
+- Line 156: `local model="${6:-sonnet}"` - model parameter with default sonnet
+- Lines 241-242: Model passed to Claude CLI with `--model claude-opus-4-5-20250514` when opus selected
+- Model is logged and passed through `ralph_fix_loop()` and `process_issue()`
 
 **Tasks:**
-- [ ] Add `--model` parameter (sonnet|opus, default: sonnet)
-- [ ] Pass `--model` flag to Claude CLI
-- [ ] Log which model is being used
+- [x] Add `--model` parameter (sonnet|opus, default: sonnet)
+- [x] Pass `--model` flag to Claude CLI
+- [x] Log which model is being used
 
 ### TASK-4.2: Model Badge in ProcessingQueue ✅ COMPLETE
 **Priority:** P2 | **Effort:** 30 min | **File:** `ui/src/components/queue/ProcessingQueue.tsx`
@@ -314,27 +317,39 @@ All implemented in `ui/src/lib/types.ts` instead of separate file:
 
 ## TIER 5: Auto-Push with Feedback (PRD-06)
 
-### TASK-5.1: Add Auto-Push Flag to ralph-engine.sh
+### TASK-5.1: Add Auto-Push Flag to ralph-engine.sh ✅ COMPLETE
 **Priority:** P1 | **Effort:** 2 hours | **File:** `lib/ralph-engine.sh`
-**Dependencies:** None
+**Dependencies:** None | **Completed:** 2026-01-26
 
-**Current State:** Push is unconditional (lines 198-223). Always pushes and creates PR.
+**Implementation:**
+- Line 380: `local auto_push="${8:-true}"` - auto_push parameter with default true
+- Line 525: Push is conditional on `auto_push != "true"` check
+- Push events emitted via `emit_activity()` with PR URL in details
+- Error handling with graceful fallback messages
 
 **Tasks:**
-- [ ] Add `--auto-push` parameter (default: true for backward compat)
-- [ ] Make push conditional on flag
-- [ ] Emit push event to activity feed when pushing
-- [ ] Handle push failures gracefully
+- [x] Add `--auto-push` parameter (default: true for backward compat)
+- [x] Make push conditional on flag
+- [x] Emit push event to activity feed when pushing
+- [x] Handle push failures gracefully
 
-### TASK-5.2: Push Status in ProcessingQueue
+### TASK-5.2: Push Status in ProcessingQueue ⚠️ PARTIAL
 **Priority:** P1 | **Effort:** 1 hour | **File:** `ui/src/components/queue/ProcessingQueue.tsx`
 **Dependencies:** TASK-5.1, TASK-1.4
 
-**Current State:** PR URLs hardcoded as `undefined` (line 106).
+**Current State:** Backend emits PR URLs via `emit_activity()` but UI doesn't capture them in queue state.
+
+**What Works:**
+- Push events are streamed to ActivityFeed with PR URLs in the `details` field
+- Push status (success/failure) is visible in the ActivityFeed component
+
+**What Needs Work:**
+- ProcessingQueue.tsx line 109 has `prUrl: undefined` - needs to extract from activities
+- QueueItem component supports prUrl prop but never receives actual URL
 
 **Tasks:**
-- [ ] Show push status indicator (Pushed / Push failed)
-- [ ] Display actual PR URL when available
+- [x] Show push status indicator (via ActivityFeed streaming)
+- [ ] Display actual PR URL in queue entries (extract from push activities)
 - [ ] Add retry push button on failure
 
 ---
@@ -680,17 +695,20 @@ All config variables added to `config.sh`:
 
 ## Gaps Found During Audit
 
-### Code Issues Found
-1. `--json` flag not implemented in CLI (fallback warning in `ui/src/lib/meta-ralph.ts:31-33`)
-2. `ProcessingIndicator` not exported from `ui/src/components/queue/index.ts`
-3. PR URLs hardcoded as `undefined` in ProcessingQueue.tsx (line 106)
-4. Pause/Resume functionality marked "for future use" (lines 22-24)
-5. ActivityFeed hardcoded to `activities={[]}` in ProcessingView.tsx (line 217)
-6. MetricsDisplay hardcoded to `metrics={null}` in ProcessingView.tsx (line 225)
-7. Activity types mismatch: current uses old types, spec requires new types
-8. ~~CLI integration doesn't pass mode/model to process_issue()~~ **FIXED:** meta-ralph.sh now reads RALPH_MODE env var (line 351)
+### Code Issues Found (Updated 2026-01-26)
 
-**Note:** Mode and model badges are now displayed in ProcessingQueue.tsx and ProcessingView.tsx headers (PRD-04/PRD-05 UI badges complete)
+| Issue | Status | Notes |
+|-------|--------|-------|
+| `--json` flag not implemented in CLI | ⚠️ Open | Fallback warning in `ui/src/lib/meta-ralph.ts:31-33` |
+| PR URLs hardcoded in ProcessingQueue | ⚠️ Open | Line 109: `prUrl: undefined` - needs to extract from activities |
+| Pause/Resume functionality | ⏸️ Deferred | Marked "for future use" (lines 22-24) |
+| ProcessingIndicator export | ✅ Fixed | Now exported from queue/index.ts |
+| ActivityFeed hardcoded | ✅ Fixed | Now connected to real SSE stream via activitiesMap |
+| MetricsDisplay hardcoded | ✅ Fixed | Now connected to real SSE stream via metricsMap |
+| Activity types mismatch | ✅ Fixed | All activity types aligned with spec |
+| CLI mode/model passing | ✅ Fixed | meta-ralph.sh reads RALPH_MODE env var |
+
+**Note:** Mode and model badges are now displayed in ProcessingQueue.tsx and ProcessingView.tsx headers (PRD-04/PRD-05 UI badges complete). TASK-4.1 and TASK-5.1 are fully implemented in ralph-engine.sh.
 
 ### Missing Files Summary (Updated 2026-01-26)
 
