@@ -507,17 +507,18 @@ All config variables added to `config.sh`:
 
 ## TIER 9: Additional API Endpoints
 
-### TASK-9.1: Bulk Actions API
-**Priority:** P2 | **Effort:** 2 hours | **File:** `ui/src/app/api/issues/bulk/route.ts` (NEW)
-**Dependencies:** TASK-0.1
+### TASK-9.1: Bulk Actions API ✅ COMPLETE
+**Priority:** P2 | **Effort:** 2 hours | **File:** `ui/src/app/api/issues/bulk/route.ts`
+**Dependencies:** TASK-0.1 | **Completed:** 2026-01-26
 
-**Current State:** Types exist (`BulkActionRequest`, `BulkActionResponse` at types.ts lines 252-270) but endpoint missing.
-
-**Tasks:**
-- [ ] Create `ui/src/app/api/issues/bulk/route.ts`
-- [ ] Implement POST handler
-- [ ] Support actions: export, tag, untag, priority, ignore, restore, process
-- [ ] Include options parameter for process action
+**Implementation:**
+- [x] Create `ui/src/app/api/issues/bulk/route.ts`
+- [x] Implement POST handler with BulkActionRequest validation
+- [x] Support all actions: export, tag, untag, priority, ignore, restore, process
+- [x] Export action returns issue data for client-side download
+- [x] Process action integrates with processIssues and session-manager
+- [x] Tag/untag acknowledge for client-side localStorage update
+- [x] Priority/ignore/restore acknowledge with future server-side notes
 
 ---
 
@@ -683,7 +684,7 @@ All config variables added to `config.sh`:
 | Providers | ✅ ALL COMPLETE - `providers/github/provider.sh`, `providers/linear/provider.sh` created |
 | UI Components | ✅ ALL COMPLETE - options directory, CIStatusPanel, PlanViewerModal exist |
 | Hooks | ✅ ALL COMPLETE - useProcessingStream, useActivityFeed, useProcessingOptions, useCIStatus exist |
-| API Routes | ⚠️ MOSTLY COMPLETE - Only `api/issues/bulk/` route still missing |
+| API Routes | ✅ ALL COMPLETE - `api/issues/bulk/` route created |
 | Libraries | ✅ ALL COMPLETE - events.ts, plan-parser.ts (with tests) exist |
 
 ### Config Gaps
