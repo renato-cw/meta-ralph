@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback } from 'react';
-import type { Issue, ProcessingStatus } from '@/lib/types';
+import { useCallback, useMemo } from 'react';
+import type { Issue, ProcessingStatus, Activity, ExecutionMetrics } from '@/lib/types';
 import { QueueProgress } from './QueueProgress';
 import { ActivityFeed } from './ActivityFeed';
 import { MetricsDisplay } from './MetricsDisplay';
 import { ProviderBadge } from '../common/ProviderBadge';
+import { useProcessingStream } from '@/hooks';
 
 interface ProcessingViewProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ interface ProcessingViewProps {
 /**
  * Full-screen dedicated view for processing issues.
  * Replaces the cramped sidebar with a spacious layout.
+ * Integrates with SSE streaming for real-time activity updates.
  */
 export function ProcessingView({
   isOpen,
@@ -34,12 +36,66 @@ export function ProcessingView({
   onRemoveItem,
   onCancelAll,
 }: ProcessingViewProps) {
+  // SSE streaming hook - connects to stream when processing
+  const {
+    activities: activitiesMap,
+    metrics: metricsMap,
+    connectionState,
+    error: streamError,
+  } = useProcessingStream({
+    issueIds: queuedIds,
+    autoConnect: isOpen && queuedIds.length > 0,
+  });
+
   // Hooks must be called before any early returns
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose();
     }
   }, [onClose]);
+
+  // Aggregate activities from all issues into a single sorted array
+  const allActivities = useMemo((): Activity[] => {
+    const activities: Activity[] = [];
+    activitiesMap.forEach((issueActivities) => {
+      activities.push(...issueActivities);
+    });
+    // Sort by timestamp, most recent last (for bottom-to-top display)
+    return activities.sort((a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+  }, [activitiesMap]);
+
+  // Get the current metrics for the processing issue (or aggregate)
+  const currentMetrics = useMemo((): ExecutionMetrics | null => {
+    // If there's a current issue being processed, show its metrics
+    if (processing.currentIssueId) {
+      return metricsMap.get(processing.currentIssueId) || null;
+    }
+    // Otherwise, aggregate metrics from all issues
+    if (metricsMap.size === 0) return null;
+
+    let totalCost = 0;
+    let totalDuration = 0;
+    let maxIteration = 0;
+    let maxIterations = 10;
+
+    metricsMap.forEach((m) => {
+      totalCost += m.totalCostUsd || m.costUsd || 0;
+      totalDuration += m.totalDurationMs || m.durationMs || 0;
+      if (m.iteration > maxIteration) maxIteration = m.iteration;
+      if (m.maxIterations > maxIterations) maxIterations = m.maxIterations;
+    });
+
+    return {
+      iteration: maxIteration,
+      maxIterations,
+      costUsd: 0,
+      durationMs: 0,
+      totalCostUsd: totalCost,
+      totalDurationMs: totalDuration,
+    };
+  }, [metricsMap, processing.currentIssueId]);
 
   // Early return after hooks
   if (!isOpen) return null;
@@ -214,18 +270,50 @@ export function ProcessingView({
 
           <div className="flex-1 overflow-y-auto">
             <ActivityFeed
-              activities={[]}
-              metrics={null}
+              activities={allActivities}
+              metrics={currentMetrics}
               isProcessing={processing.isProcessing}
             />
           </div>
 
+          {/* Connection status indicator */}
+          {streamError && (
+            <div className="flex-shrink-0 px-4 py-2 bg-yellow-500/10 border-t border-yellow-500/30 text-yellow-400 text-sm">
+              {streamError}
+            </div>
+          )}
+
           {/* Metrics bar at bottom */}
           <div className="flex-shrink-0 px-4 py-3 border-t border-[var(--border)] bg-[var(--card)]">
-            <MetricsDisplay
-              metrics={null}
-              isProcessing={processing.isProcessing}
-            />
+            <div className="flex items-center justify-between">
+              <MetricsDisplay
+                metrics={currentMetrics}
+                isProcessing={processing.isProcessing}
+              />
+              {/* Connection state indicator */}
+              <div className="flex items-center gap-2 text-xs">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    connectionState === 'connected'
+                      ? 'bg-green-500'
+                      : connectionState === 'connecting'
+                      ? 'bg-yellow-500 animate-pulse'
+                      : connectionState === 'error'
+                      ? 'bg-red-500'
+                      : 'bg-gray-500'
+                  }`}
+                />
+                <span className="text-[var(--muted)]">
+                  {connectionState === 'connected'
+                    ? 'Stream connected'
+                    : connectionState === 'connecting'
+                    ? 'Connecting...'
+                    : connectionState === 'error'
+                    ? 'Connection error'
+                    : 'Disconnected'}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </main>
