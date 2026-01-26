@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, ProcessingOptions } from '@/lib/types';
 import { QueueProgress } from './QueueProgress';
 import { ActivityFeed } from './ActivityFeed';
 import { MetricsDisplay } from './MetricsDisplay';
+import { PlanViewerModal } from './PlanViewerModal';
 import { ProviderBadge } from '../common/ProviderBadge';
 import { useProcessingStream } from '@/hooks';
 
@@ -19,6 +20,8 @@ interface ProcessingViewProps {
   onRetryItem: (id: string) => void;
   onRemoveItem?: (id: string) => void;
   onCancelAll?: () => void;
+  /** Callback to execute build mode after plan completes */
+  onExecuteBuild?: (issueIds: string[]) => void;
 }
 
 /**
@@ -37,6 +40,7 @@ export function ProcessingView({
   onRetryItem,
   onRemoveItem,
   onCancelAll,
+  onExecuteBuild,
 }: ProcessingViewProps) {
   // SSE streaming hook - connects to stream when processing
   const {
@@ -48,6 +52,19 @@ export function ProcessingView({
     issueIds: queuedIds,
     autoConnect: isOpen && queuedIds.length > 0,
   });
+
+  // State for plan viewer modal
+  const [planViewerOpen, setPlanViewerOpen] = useState(false);
+  const [selectedPlanIssueId, setSelectedPlanIssueId] = useState<string | null>(null);
+
+  // Determine if plan mode actions should be shown
+  const isPlanMode = processingOptions?.mode === 'plan';
+  const planCompleted = isPlanMode && processing.completed.length > 0 && !processing.isProcessing;
+
+  // Get the first completed issue for plan viewing
+  const firstCompletedIssue = processing.completed.length > 0
+    ? issues.find(i => i.id === processing.completed[0])
+    : null;
 
   // Hooks must be called before any early returns
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -182,6 +199,30 @@ export function ProcessingView({
           )}
         </div>
         <div className="flex items-center gap-4">
+          {/* Plan Mode Actions */}
+          {planCompleted && (
+            <>
+              <button
+                onClick={() => {
+                  setSelectedPlanIssueId(processing.completed[0] || null);
+                  setPlanViewerOpen(true);
+                }}
+                className="px-3 py-1.5 text-sm bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center gap-2"
+              >
+                <span>📋</span>
+                View Plan
+              </button>
+              {onExecuteBuild && (
+                <button
+                  onClick={() => onExecuteBuild(processing.completed)}
+                  className="px-3 py-1.5 text-sm bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors flex items-center gap-2"
+                >
+                  <span>🔨</span>
+                  Execute Build
+                </button>
+              )}
+            </>
+          )}
           {pendingItems.length > 0 && onCancelAll && (
             <button
               onClick={onCancelAll}
@@ -347,6 +388,18 @@ export function ProcessingView({
           </div>
         </div>
       </main>
+
+      {/* Plan Viewer Modal */}
+      <PlanViewerModal
+        isOpen={planViewerOpen}
+        onClose={() => {
+          setPlanViewerOpen(false);
+          setSelectedPlanIssueId(null);
+        }}
+        issueId={selectedPlanIssueId || ''}
+        issueTitle={firstCompletedIssue?.title}
+        onExecuteBuild={onExecuteBuild ? () => onExecuteBuild(processing.completed) : undefined}
+      />
     </div>
   );
 }

@@ -191,6 +191,26 @@ export default function Home() {
     ));
   }, [processing.completed, processing.failed]);
 
+  // Execute build mode after plan completes
+  const handleExecuteBuild = useCallback(async (issueIds: string[]) => {
+    if (issueIds.length === 0) return;
+    // Create build options from current options but force mode to 'build'
+    const buildOptions: ProcessingOptions = {
+      ...(currentProcessingOptions || {
+        mode: 'build',
+        model: 'sonnet',
+        maxIterations: 10,
+        autoPush: true,
+        ciAwareness: false,
+        autoFixCi: false,
+      }),
+      mode: 'build', // Force build mode
+    };
+    setQueuedIds(issueIds);
+    setCurrentProcessingOptions(buildOptions);
+    await processIssues(issueIds, buildOptions);
+  }, [currentProcessingOptions, processIssues]);
+
   const handleOpenProcessingView = useCallback(() => {
     setIsProcessingViewOpen(true);
   }, []);
@@ -545,6 +565,7 @@ export default function Home() {
         onRetryItem={handleRetryItem}
         onRemoveItem={handleRemoveFromQueue}
         onCancelAll={handleCancelAll}
+        onExecuteBuild={handleExecuteBuild}
       />
 
       {/* Processing Options Panel */}
