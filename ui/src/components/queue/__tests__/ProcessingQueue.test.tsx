@@ -237,9 +237,9 @@ describe('ProcessingQueue', () => {
       />
     );
 
-    // LogsSection displays "Live Logs" and line count separately
-    expect(screen.getByText('Live Logs')).toBeInTheDocument();
-    expect(screen.getByText('(2 lines)')).toBeInTheDocument();
+    // OutputSection displays "Output" button and logs count in the toggle
+    expect(screen.getByText('Output')).toBeInTheDocument();
+    expect(screen.getByText('Logs (2)')).toBeInTheDocument();
   });
 
   it('expands logs section when clicked', () => {

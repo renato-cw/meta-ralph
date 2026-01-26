@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect, useCallback, useMemo, useState } from 'react';
-import type { Issue, ProcessingStatus } from '@/lib/types';
+import { useEffect, useCallback, useMemo, useState, useRef } from 'react';
+import type { Issue, ProcessingStatus, Activity, ExecutionMetrics } from '@/lib/types';
 import { QueueItem } from './QueueItem';
 import { QueueProgress } from './QueueProgress';
+import { ActivityFeed } from './ActivityFeed';
+import { parseLogs } from '@/lib/events';
+
+/**
+ * View mode for the processing output section.
+ */
+type OutputViewMode = 'activity' | 'logs';
 
 interface ProcessingQueueProps {
   /** Whether the queue panel is open */
@@ -28,6 +35,8 @@ interface ProcessingQueueProps {
   onRetryItem?: (id: string) => void;
   /** Callback to clear completed/failed items */
   onClearCompleted?: () => void;
+  /** Maximum iterations for metrics display */
+  maxIterations?: number;
 }
 
 type QueueItemStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -57,20 +66,55 @@ export function ProcessingQueue({
   onCancelItem,
   onRetryItem,
   onClearCompleted,
+  maxIterations = 10,
 }: ProcessingQueueProps) {
   // Track when processing started for ETA calculation
   const [startedAt, setStartedAt] = useState<string | undefined>();
+  // Output view mode (activity feed vs raw logs)
+  const [outputViewMode, setOutputViewMode] = useState<OutputViewMode>('activity');
+  // Track processed log indices to avoid duplicates
+  const processedLogsIndexRef = useRef<number>(0);
+  // Accumulated activities
+  const [activities, setActivities] = useState<Activity[]>([]);
+  // Current metrics
+  const [metrics, setMetrics] = useState<ExecutionMetrics | null>(null);
 
   // Set start time when processing begins
   // This is a legitimate pattern to synchronize local state with external processing state
   useEffect(() => {
     if (processing.isProcessing && !startedAt) {
       setStartedAt(new Date().toISOString());
+      // Reset activities and metrics when processing starts
+      setActivities([]);
+      setMetrics(null);
+      processedLogsIndexRef.current = 0;
     } else if (!processing.isProcessing && startedAt) {
       // Reset start time when processing completes
       setStartedAt(undefined);
     }
   }, [processing.isProcessing, startedAt]);
+
+  // Parse new logs into activities
+  useEffect(() => {
+    if (logs.length <= processedLogsIndexRef.current) return;
+
+    const newLogs = logs.slice(processedLogsIndexRef.current);
+    processedLogsIndexRef.current = logs.length;
+
+    const { activities: newActivities, metrics: newMetrics } = parseLogs(newLogs, maxIterations);
+
+    if (newActivities.length > 0) {
+      setActivities(prev => {
+        const combined = [...prev, ...newActivities];
+        // Keep only last 500 activities
+        return combined.length > 500 ? combined.slice(-500) : combined;
+      });
+    }
+
+    if (newMetrics) {
+      setMetrics(newMetrics);
+    }
+  }, [logs, maxIterations]);
 
   // Build queue entries from processing state and issues
   const queueEntries = useMemo((): QueueEntry[] => {
@@ -340,9 +384,16 @@ export function ProcessingQueue({
           </div>
         )}
 
-        {/* Logs section (collapsed by default) */}
-        {logs.length > 0 && (
-          <LogsSection logs={logs} />
+        {/* Output section - Activity Feed or Logs */}
+        {(processing.isProcessing || logs.length > 0) && (
+          <OutputSection
+            logs={logs}
+            activities={activities}
+            metrics={metrics}
+            isProcessing={processing.isProcessing}
+            viewMode={outputViewMode}
+            onViewModeChange={setOutputViewMode}
+          />
         )}
       </div>
     </>
@@ -350,47 +401,162 @@ export function ProcessingQueue({
 }
 
 /**
- * Collapsible logs section within the queue panel.
+ * Output section with toggle between Activity Feed and Raw Logs views.
  */
-function LogsSection({ logs }: { logs: string[] }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+interface OutputSectionProps {
+  logs: string[];
+  activities: Activity[];
+  metrics: ExecutionMetrics | null;
+  isProcessing: boolean;
+  viewMode: OutputViewMode;
+  onViewModeChange: (mode: OutputViewMode) => void;
+}
+
+function OutputSection({
+  logs,
+  activities,
+  metrics,
+  isProcessing,
+  viewMode,
+  onViewModeChange,
+}: OutputSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [isFullHeight, setIsFullHeight] = useState(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new logs arrive (only in logs view)
+  useEffect(() => {
+    if (isExpanded && viewMode === 'logs' && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, isExpanded, viewMode]);
+
+  // Expand automatically when processing starts
+  useEffect(() => {
+    if (isProcessing) {
+      setIsExpanded(true);
+    }
+  }, [isProcessing]);
+
+  const contentHeight = isFullHeight ? 'h-96' : 'h-64';
 
   return (
-    <div className="flex-shrink-0 border-t border-[var(--border)]">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-2 flex items-center justify-between text-sm text-[var(--muted)] hover:bg-[var(--border)] transition-colors"
-      >
-        <span>Processing Logs ({logs.length} lines)</span>
-        <svg
-          className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {isExpanded && (
-        <div className="bg-black p-3 h-40 overflow-y-auto font-mono text-xs">
-          {logs.map((log, i) => (
-            <div
-              key={i}
-              className={`whitespace-pre-wrap break-all ${
-                log.includes('[error]') || log.includes('Error')
-                  ? 'text-red-400'
-                  : log.includes('[stderr]')
-                  ? 'text-yellow-400'
-                  : log.includes('success') || log.includes('complete')
-                  ? 'text-green-400'
-                  : 'text-gray-400'
-              }`}
+    <div className={`flex-shrink-0 border-t border-[var(--border)] ${isExpanded ? 'flex flex-col' : ''}`}>
+      {/* Header with view toggle */}
+      <div className="flex items-center justify-between px-4 py-2 bg-[var(--background)]">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              {log}
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            <span className="font-medium">Output</span>
+          </button>
+
+          {/* View mode toggle */}
+          {isExpanded && (
+            <div className="flex items-center bg-[var(--border)] rounded-lg p-0.5">
+              <button
+                onClick={() => onViewModeChange('activity')}
+                className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                  viewMode === 'activity'
+                    ? 'bg-[var(--card)] text-[var(--foreground)]'
+                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                Activity
+              </button>
+              <button
+                onClick={() => onViewModeChange('logs')}
+                className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                  viewMode === 'logs'
+                    ? 'bg-[var(--card)] text-[var(--foreground)]'
+                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                Logs ({logs.length})
+              </button>
             </div>
-          ))}
+          )}
+
+          {isProcessing && (
+            <span className="flex items-center gap-1 text-xs text-green-400">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              streaming
+            </span>
+          )}
+        </div>
+
+        {isExpanded && (
+          <button
+            onClick={() => setIsFullHeight(!isFullHeight)}
+            className="p-1.5 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)] rounded transition-colors"
+            title={isFullHeight ? 'Collapse' : 'Expand'}
+          >
+            {isFullHeight ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Content */}
+      {isExpanded && (
+        <div className={`bg-[#0d1117] ${contentHeight} overflow-hidden transition-all duration-200`}>
+          {viewMode === 'activity' ? (
+            <div className="h-full p-3 overflow-y-auto">
+              <ActivityFeed
+                activities={activities}
+                metrics={metrics}
+                isProcessing={isProcessing}
+                maxHeight={isFullHeight ? 'h-[calc(100%-1rem)]' : 'h-[calc(100%-1rem)]'}
+              />
+            </div>
+          ) : (
+            <div className="h-full overflow-y-auto font-mono text-xs">
+              <div className="p-3 space-y-0.5">
+                {logs.length === 0 ? (
+                  <div className="text-gray-500 italic">Waiting for logs...</div>
+                ) : (
+                  logs.map((log, i) => (
+                    <div
+                      key={i}
+                      className={`whitespace-pre-wrap break-all leading-relaxed ${
+                        log.includes('[error]') || log.includes('Error') || log.includes('ERROR')
+                          ? 'text-red-400'
+                          : log.includes('[stderr]') || log.includes('warning') || log.includes('WARN')
+                          ? 'text-yellow-400'
+                          : log.includes('success') || log.includes('complete') || log.includes('COMPLETE')
+                          ? 'text-green-400'
+                          : log.includes('>>>') || log.includes('===')
+                          ? 'text-cyan-400 font-semibold'
+                          : 'text-gray-400'
+                      }`}
+                    >
+                      {log}
+                    </div>
+                  ))
+                )}
+                <div ref={logsEndRef} />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+

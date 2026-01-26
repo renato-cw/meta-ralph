@@ -14,3 +14,8 @@ export { useSavedViews, type UseSavedViewsOptions, type UseSavedViewsReturn } fr
 export { useHistory, type HistoryFilter, type UseHistoryOptions, type UseHistoryReturn } from './useHistory';
 export { useTags } from './useTags';
 export { useProcessingOptions, type UseProcessingOptionsReturn } from './useProcessingOptions';
+export {
+  useProcessingStream,
+  type UseProcessingStreamOptions,
+  type UseProcessingStreamReturn,
+} from './useProcessingStream';

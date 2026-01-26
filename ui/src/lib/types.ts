@@ -69,6 +69,111 @@ export interface QueueItem {
 }
 
 // ============================================================================
+// Activity & Streaming Types (PRD-03)
+// ============================================================================
+
+/**
+ * Types of tools that Claude can use during processing.
+ */
+export type ClaudeToolType =
+  | 'Read'
+  | 'Write'
+  | 'Edit'
+  | 'Bash'
+  | 'Glob'
+  | 'Grep'
+  | 'Task'
+  | 'TodoWrite'
+  | 'WebFetch'
+  | 'WebSearch';
+
+/**
+ * Types of events from Claude's stream-json output.
+ */
+export type ClaudeEventType =
+  | 'assistant'
+  | 'content_block_start'
+  | 'content_block_delta'
+  | 'result'
+  | 'error'
+  | 'system';
+
+/**
+ * A single activity entry in the activity feed.
+ */
+export interface Activity {
+  id: string;
+  timestamp: string;
+  type: 'tool' | 'message' | 'result' | 'error' | 'system';
+  tool?: ClaudeToolType;
+  details?: string;
+  status?: 'pending' | 'success' | 'error';
+  duration?: number; // milliseconds
+}
+
+/**
+ * Execution metrics for a processing iteration.
+ */
+export interface ExecutionMetrics {
+  iteration: number;
+  maxIterations: number;
+  costUsd: number;
+  durationMs: number;
+  totalCostUsd: number;
+  totalDurationMs: number;
+}
+
+/**
+ * Icons for each Claude tool type.
+ */
+export const TOOL_ICONS: Record<ClaudeToolType, string> = {
+  Read: '🔍',
+  Write: '✏️',
+  Edit: '✏️',
+  Bash: '⚡',
+  Glob: '📁',
+  Grep: '🔎',
+  Task: '🚀',
+  TodoWrite: '📝',
+  WebFetch: '🌐',
+  WebSearch: '🔍',
+};
+
+/**
+ * Colors for each tool type (for styling).
+ */
+export const TOOL_COLORS: Record<ClaudeToolType, { bg: string; text: string }> = {
+  Read: { bg: 'bg-blue-900/30', text: 'text-blue-400' },
+  Write: { bg: 'bg-green-900/30', text: 'text-green-400' },
+  Edit: { bg: 'bg-yellow-900/30', text: 'text-yellow-400' },
+  Bash: { bg: 'bg-purple-900/30', text: 'text-purple-400' },
+  Glob: { bg: 'bg-cyan-900/30', text: 'text-cyan-400' },
+  Grep: { bg: 'bg-cyan-900/30', text: 'text-cyan-400' },
+  Task: { bg: 'bg-orange-900/30', text: 'text-orange-400' },
+  TodoWrite: { bg: 'bg-pink-900/30', text: 'text-pink-400' },
+  WebFetch: { bg: 'bg-indigo-900/30', text: 'text-indigo-400' },
+  WebSearch: { bg: 'bg-indigo-900/30', text: 'text-indigo-400' },
+};
+
+/**
+ * SSE event types for streaming.
+ */
+export type SSEEventType = 'activity' | 'metrics' | 'log' | 'complete' | 'error';
+
+/**
+ * SSE event payload structure.
+ */
+export interface SSEEvent {
+  type: SSEEventType;
+  payload: Activity | ExecutionMetrics | string | { success: boolean; message?: string };
+}
+
+/**
+ * Stream connection status.
+ */
+export type StreamStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+// ============================================================================
 // Processing Options Types (PRD-04, PRD-05, PRD-06, PRD-09)
 // ============================================================================
 
