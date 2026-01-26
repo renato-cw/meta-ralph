@@ -13,9 +13,10 @@ import { GroupedView, ViewToggle, SavedViews, SaveViewDialog } from '@/component
 import { Dashboard } from '@/components/dashboard';
 import { ProcessingQueue, ProcessingView } from '@/components/queue';
 import { HistoryView } from '@/components/history';
+import { ProcessingOptionsPanel } from '@/components/options';
 import { useSavedViews, useHistory } from '@/hooks';
 import { useApp } from '@/contexts';
-import type { SortField, GroupBy, SavedView, HistoryEntry } from '@/lib/types';
+import type { SortField, GroupBy, SavedView, HistoryEntry, ProcessingOptions } from '@/lib/types';
 
 export default function Home() {
   const {
@@ -101,6 +102,9 @@ export default function Home() {
   // Processing view state (full-screen dedicated view)
   const [isProcessingViewOpen, setIsProcessingViewOpen] = useState(false);
 
+  // Processing options panel state
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+
   // History hook
   const {
     entries: historyEntries,
@@ -145,12 +149,20 @@ export default function Home() {
     toggleSort(field);
   }, [toggleSort]);
 
-  const handleProcess = useCallback(async () => {
+  // Open options panel before processing
+  const handleProcess = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setIsOptionsOpen(true);
+  }, [selectedIds]);
+
+  // Start processing with the selected options
+  const handleStartProcessing = useCallback(async (options: ProcessingOptions) => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
+    setIsOptionsOpen(false);
     setQueuedIds(ids);
     setIsProcessingViewOpen(true); // Open full-screen processing view
-    await processIssues(ids);
+    await processIssues(ids, options);
   }, [selectedIds, processIssues]);
 
   const handleToggleQueue = useCallback(() => {
@@ -529,6 +541,14 @@ export default function Home() {
         onRetryItem={handleRetryItem}
         onRemoveItem={handleRemoveFromQueue}
         onCancelAll={handleCancelAll}
+      />
+
+      {/* Processing Options Panel */}
+      <ProcessingOptionsPanel
+        isOpen={isOptionsOpen}
+        onClose={() => setIsOptionsOpen(false)}
+        selectedIssues={processedIssues.filter((i) => selectedIds.has(i.id))}
+        onStart={handleStartProcessing}
       />
     </div>
   );

@@ -25,3 +25,10 @@ export {
   type UseActivityFeedOptions,
   type UseActivityFeedReturn,
 } from './useActivityFeed';
+
+// Processing options hook (PRD-09)
+export {
+  useProcessingOptions,
+  type UseProcessingOptionsOptions,
+  type UseProcessingOptionsReturn,
+} from './useProcessingOptions';
