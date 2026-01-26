@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
-import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, ProcessingOptions } from '@/lib/types';
+import { useCallback, useMemo, useState, useEffect } from 'react';
+import type { Issue, ProcessingStatus, Activity, ExecutionMetrics, ProcessingOptions, CIStatusResponse } from '@/lib/types';
 import { QueueProgress } from './QueueProgress';
 import { ActivityFeed } from './ActivityFeed';
 import { MetricsDisplay } from './MetricsDisplay';
 import { PlanViewerModal } from './PlanViewerModal';
+import { CIStatusPanel } from './CIStatusPanel';
 import { ProviderBadge } from '../common/ProviderBadge';
-import { useProcessingStream } from '@/hooks';
+import { useProcessingStream, useCIStatus } from '@/hooks';
 
 interface ProcessingViewProps {
   isOpen: boolean;
@@ -57,6 +58,45 @@ export function ProcessingView({
   const [planViewerOpen, setPlanViewerOpen] = useState(false);
   const [selectedPlanIssueId, setSelectedPlanIssueId] = useState<string | null>(null);
 
+  // CI status tracking
+  const [ciInfo, setCiInfo] = useState<{
+    sha: string;
+    owner: string;
+    repo: string;
+  } | null>(null);
+  const [showCIPanel, setShowCIPanel] = useState(false);
+
+  // CI status hook - only active when we have commit info and CI awareness is enabled
+  const ciEnabled = processingOptions?.ciAwareness ?? false;
+  const {
+    status: ciStatus,
+    isPolling: ciIsPolling,
+    isLoading: ciIsLoading,
+    error: ciError,
+    refresh: ciRefresh,
+    triggerAutoFix: ciTriggerAutoFix,
+    startPolling: ciStartPolling,
+    stopPolling: ciStopPolling,
+  } = useCIStatus({
+    owner: ciInfo?.owner ?? '',
+    repo: ciInfo?.repo ?? '',
+    sha: ciInfo?.sha ?? '',
+    config: {
+      enabled: ciEnabled && !!ciInfo,
+      autoFix: processingOptions?.autoFixCi ?? false,
+      pollInterval: 30000, // 30 seconds
+      maxRetries: 3,
+    },
+    onSuccess: (response) => {
+      console.log('CI checks passed:', response);
+    },
+    onFailure: (response, failures) => {
+      console.log('CI checks failed:', failures);
+      // Auto-expand CI panel on failure
+      setShowCIPanel(true);
+    },
+  });
+
   // Determine if plan mode actions should be shown
   const isPlanMode = processingOptions?.mode === 'plan';
   const planCompleted = isPlanMode && processing.completed.length > 0 && !processing.isProcessing;
@@ -84,6 +124,35 @@ export function ProcessingView({
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
   }, [activitiesMap]);
+
+  // Watch for push events in activities to extract CI info
+  useEffect(() => {
+    if (!ciEnabled) return;
+
+    // Look for push activities that contain commit info
+    for (const activity of allActivities) {
+      if (activity.type === 'push' && activity.details) {
+        // Try to extract commit SHA and repo info from activity details
+        // Format expected: "Pushed to branch feature/xxx (sha: abc123)"
+        const shaMatch = activity.details.match(/sha:\s*([a-f0-9]+)/i);
+        const repoMatch = activity.details.match(/repo:\s*([^/\s]+\/[^/\s]+)/i);
+
+        if (shaMatch) {
+          const sha = shaMatch[1];
+          // Try to get owner/repo from environment or activity
+          const ownerRepo = repoMatch?.[1]?.split('/') ?? ['', ''];
+          const owner = ownerRepo[0] || process.env.NEXT_PUBLIC_GITHUB_OWNER || 'unknown';
+          const repo = ownerRepo[1] || process.env.NEXT_PUBLIC_GITHUB_REPO || 'unknown';
+
+          if (sha !== ciInfo?.sha) {
+            setCiInfo({ sha, owner, repo });
+            setShowCIPanel(true);
+            ciStartPolling();
+          }
+        }
+      }
+    }
+  }, [allActivities, ciEnabled, ciInfo?.sha, ciStartPolling]);
 
   // Get the current metrics for the processing issue (or aggregate)
   const currentMetrics = useMemo((): ExecutionMetrics | null => {
@@ -323,7 +392,7 @@ export function ProcessingView({
           </div>
         </div>
 
-        {/* Right panel - Activity Feed */}
+        {/* Right panel - Activity Feed and CI Status */}
         <div className="flex-1 flex flex-col bg-[var(--background)]">
           <div className="flex-shrink-0 px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
             <div>
@@ -332,12 +401,52 @@ export function ProcessingView({
                 Real-time actions from Claude
               </p>
             </div>
-            {processing.isProcessing && (
-              <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded-full animate-pulse">
-                Live
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {processing.isProcessing && (
+                <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded-full animate-pulse">
+                  Live
+                </span>
+              )}
+              {/* CI Status Toggle Button */}
+              {ciEnabled && ciInfo && (
+                <button
+                  onClick={() => setShowCIPanel(!showCIPanel)}
+                  className={`px-2 py-1 text-xs rounded-full transition-colors flex items-center gap-1 ${
+                    showCIPanel
+                      ? 'bg-cyan-500/20 text-cyan-400'
+                      : 'bg-[var(--muted)]/20 text-[var(--muted)] hover:bg-cyan-500/20 hover:text-cyan-400'
+                  }`}
+                  title={showCIPanel ? 'Hide CI status' : 'Show CI status'}
+                >
+                  <span>🔄</span>
+                  <span>CI</span>
+                  {ciStatus?.overallStatus === 'failure' && (
+                    <span className="ml-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  )}
+                  {ciStatus?.overallStatus === 'success' && (
+                    <span className="ml-1 w-2 h-2 rounded-full bg-green-500" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* CI Status Panel (collapsible) */}
+          {ciEnabled && showCIPanel && ciInfo && (
+            <div className="flex-shrink-0 border-b border-[var(--border)] bg-[var(--card)]">
+              <CIStatusPanel
+                status={ciStatus}
+                isLoading={ciIsLoading}
+                error={ciError}
+                isPolling={ciIsPolling}
+                owner={ciInfo.owner}
+                repo={ciInfo.repo}
+                onRefresh={ciRefresh}
+                onAutoFix={processingOptions?.autoFixCi ? ciTriggerAutoFix : undefined}
+                showHeader={true}
+              />
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto">
             <ActivityFeed

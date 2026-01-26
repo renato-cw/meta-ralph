@@ -32,3 +32,12 @@ export {
   type UseProcessingOptionsOptions,
   type UseProcessingOptionsReturn,
 } from './useProcessingOptions';
+
+// CI status hook (PRD-07)
+export {
+  useCIStatus,
+  getCIStatusIcon,
+  getCIStatusColor,
+  type UseCIStatusOptions,
+  type UseCIStatusReturn,
+} from './useCIStatus';
