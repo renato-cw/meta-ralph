@@ -16,6 +16,7 @@ import { useGrouping, type GroupedIssues } from '@/hooks/useGrouping';
 import type {
   Issue,
   ProcessingStatus,
+  ProcessingOptions,
   FilterState,
   SortState,
   SortField,
@@ -23,6 +24,7 @@ import type {
   IssueStatus,
   GroupBy,
 } from '@/lib/types';
+import { DEFAULT_PROCESSING_OPTIONS } from '@/lib/types';
 
 // ============================================================================
 // Types
@@ -52,8 +54,8 @@ export interface AppContextType {
 
   // Processing state
   processing: ProcessingStatus;
-  processIssues: (ids: string[]) => Promise<void>;
-  processSingleIssue: (issueId: string) => Promise<void>;
+  processIssues: (ids: string[], options?: ProcessingOptions) => Promise<void>;
+  processSingleIssue: (issueId: string, options?: ProcessingOptions) => Promise<void>;
 
   // Sort state (from useSort)
   sort: SortState;
@@ -278,15 +280,18 @@ export function AppProvider({ children }: AppProviderProps) {
     setIsDetailOpen(false);
   }, []);
 
-  // Process issues
-  const processIssues = useCallback(async (ids: string[]) => {
+  // Process issues with optional processing options
+  const processIssues = useCallback(async (ids: string[], options?: ProcessingOptions) => {
     if (ids.length === 0) return;
 
     try {
       const response = await fetch('/api/issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({
+          ids,
+          options: options || DEFAULT_PROCESSING_OPTIONS,
+        }),
       });
 
       if (!response.ok) {
@@ -301,12 +306,15 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, []);
 
-  const processSingleIssue = useCallback(async (issueId: string) => {
+  const processSingleIssue = useCallback(async (issueId: string, options?: ProcessingOptions) => {
     try {
       const response = await fetch('/api/issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [issueId] }),
+        body: JSON.stringify({
+          ids: [issueId],
+          options: options || DEFAULT_PROCESSING_OPTIONS,
+        }),
       });
 
       if (!response.ok) {

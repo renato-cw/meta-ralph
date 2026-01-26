@@ -13,3 +13,4 @@ export { useVirtualList, usePageSize, PAGE_SIZES, type PageSize } from './useVir
 export { useSavedViews, type UseSavedViewsOptions, type UseSavedViewsReturn } from './useSavedViews';
 export { useHistory, type HistoryFilter, type UseHistoryOptions, type UseHistoryReturn } from './useHistory';
 export { useTags } from './useTags';
+export { useProcessingOptions, type UseProcessingOptionsReturn } from './useProcessingOptions';

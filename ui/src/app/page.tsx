@@ -12,9 +12,10 @@ import { GroupedView, ViewToggle, SavedViews, SaveViewDialog } from '@/component
 import { Dashboard } from '@/components/dashboard';
 import { ProcessingQueue, ProcessingIndicator } from '@/components/queue';
 import { HistoryView } from '@/components/history';
-import { useSavedViews, useHistory, useTags } from '@/hooks';
+import { useSavedViews, useHistory, useTags, useProcessingOptions } from '@/hooks';
 import { useApp } from '@/contexts';
-import type { SortField, GroupBy, SavedView, HistoryEntry } from '@/lib/types';
+import { ProcessingOptionsPanel, ProcessingOptionsSummary } from '@/components/options';
+import type { SortField, GroupBy, SavedView, HistoryEntry, ProcessingOptions } from '@/lib/types';
 
 export default function Home() {
   const {
@@ -85,11 +86,12 @@ export default function Home() {
   // Tags hook - provides tag management functionality
   const {
     tags,
-    getIssueTags,
-    addTagToIssue,
-    removeTagFromIssue,
-    bulkAddTags,
-    bulkRemoveTags,
+    // These are available for future use in tag management features
+    getIssueTags: _getIssueTags,
+    addTagToIssue: _addTagToIssue,
+    removeTagFromIssue: _removeTagFromIssue,
+    bulkAddTags: _bulkAddTags,
+    bulkRemoveTags: _bulkRemoveTags,
   } = useTags();
 
   // Refs for keyboard navigation
@@ -107,6 +109,12 @@ export default function Home() {
 
   // History panel state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // Options panel state
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+
+  // Processing options hook
+  const processingOptions = useProcessingOptions();
 
   // History hook
   const {
@@ -152,12 +160,25 @@ export default function Home() {
     toggleSort(field);
   }, [toggleSort]);
 
-  const handleProcess = useCallback(async () => {
+  // Open options panel when process is requested
+  const handleProcess = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setIsOptionsOpen(true);
+  }, [selectedIds]);
+
+  // Close options panel
+  const handleCloseOptions = useCallback(() => {
+    setIsOptionsOpen(false);
+  }, []);
+
+  // Start processing with confirmed options
+  const handleStartProcessing = useCallback(async (options: ProcessingOptions) => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
     setQueuedIds(ids);
+    setIsOptionsOpen(false);
     setIsQueueOpen(true);
-    await processIssues(ids);
+    await processIssues(ids, options);
   }, [selectedIds, processIssues]);
 
   const handleToggleQueue = useCallback(() => {
@@ -170,8 +191,8 @@ export default function Home() {
 
   const handleRetryItem = useCallback(async (id: string) => {
     setQueuedIds(prev => [...prev, id]);
-    await processIssues([id]);
-  }, [processIssues]);
+    await processIssues([id], processingOptions.options);
+  }, [processIssues, processingOptions.options]);
 
   const handleToggleFilters = useCallback(() => {
     setFiltersExpanded((prev) => !prev);
@@ -207,9 +228,9 @@ export default function Home() {
     if (issue) {
       setQueuedIds(prev => [...prev, issue.id]);
       setIsQueueOpen(true);
-      await processIssues([issue.id]);
+      await processIssues([issue.id], processingOptions.options);
     }
-  }, [issues, processIssues]);
+  }, [issues, processIssues, processingOptions.options]);
 
   const handleRemoveFromHistory = useCallback((entry: HistoryEntry) => {
     removeHistoryEntry(entry.id);
@@ -290,6 +311,10 @@ export default function Home() {
           >
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
+          <ProcessingOptionsSummary
+            options={processingOptions.options}
+            onClick={() => setIsOptionsOpen(true)}
+          />
           <ProcessButton
             selectedCount={selectedIds.size}
             isProcessing={processing.isProcessing}
@@ -487,6 +512,18 @@ export default function Home() {
         onClearFailed={clearFailedHistory}
         stats={historyStats}
         availableProviders={availableProviders}
+      />
+
+      {/* Processing options panel */}
+      <ProcessingOptionsPanel
+        isOpen={isOptionsOpen}
+        onClose={handleCloseOptions}
+        onStartProcessing={handleStartProcessing}
+        issueCount={selectedIds.size}
+        issueSeverities={processedIssues
+          .filter(i => selectedIds.has(i.id))
+          .map(i => i.severity)}
+        processingOptions={processingOptions}
       />
     </div>
   );

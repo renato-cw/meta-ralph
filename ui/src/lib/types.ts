@@ -69,6 +69,158 @@ export interface QueueItem {
 }
 
 // ============================================================================
+// Processing Options Types (PRD-04, PRD-05, PRD-06, PRD-09)
+// ============================================================================
+
+/**
+ * Processing mode: plan (analysis only) or build (implement fix).
+ */
+export type ProcessingMode = 'plan' | 'build';
+
+/**
+ * Claude model selection.
+ */
+export type ProcessingModel = 'sonnet' | 'opus';
+
+/**
+ * Complete processing options configuration.
+ */
+export interface ProcessingOptions {
+  mode: ProcessingMode;
+  model: ProcessingModel;
+  maxIterations: number;
+  autoPush: boolean;
+  ciAwareness: boolean;
+  autoFixCi: boolean;
+}
+
+/**
+ * Default processing options.
+ */
+export const DEFAULT_PROCESSING_OPTIONS: ProcessingOptions = {
+  mode: 'build',
+  model: 'sonnet',
+  maxIterations: 10,
+  autoPush: true,
+  ciAwareness: false,
+  autoFixCi: false,
+};
+
+/**
+ * A preset configuration for common use cases.
+ */
+export interface ProcessingPreset {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  options: ProcessingOptions;
+  isCustom?: boolean;
+}
+
+/**
+ * Cost estimate for processing.
+ */
+export interface CostEstimate {
+  min: number;
+  max: number;
+  currency: 'USD';
+}
+
+/**
+ * Model cost information for display.
+ */
+export interface ModelInfo {
+  name: string;
+  description: string;
+  costPer1kTokens: number;
+  speed: 'fast' | 'slow';
+  capability: 'standard' | 'advanced';
+}
+
+/**
+ * Model information for UI display.
+ */
+export const MODEL_INFO: Record<ProcessingModel, ModelInfo> = {
+  sonnet: {
+    name: 'Sonnet',
+    description: 'Fast and cost-effective for most issues',
+    costPer1kTokens: 0.003,
+    speed: 'fast',
+    capability: 'standard',
+  },
+  opus: {
+    name: 'Opus',
+    description: 'Advanced reasoning for complex issues',
+    costPer1kTokens: 0.015,
+    speed: 'slow',
+    capability: 'advanced',
+  },
+};
+
+/**
+ * Pre-configured processing presets.
+ */
+export const PROCESSING_PRESETS: ProcessingPreset[] = [
+  {
+    id: 'quick-fix',
+    name: 'Quick Fix',
+    description: 'Fast fix with Sonnet',
+    icon: '⚡',
+    options: {
+      mode: 'build',
+      model: 'sonnet',
+      maxIterations: 5,
+      autoPush: true,
+      ciAwareness: false,
+      autoFixCi: false,
+    },
+  },
+  {
+    id: 'careful-fix',
+    name: 'Careful Fix',
+    description: 'Plan first, then build',
+    icon: '🎯',
+    options: {
+      mode: 'plan',
+      model: 'sonnet',
+      maxIterations: 10,
+      autoPush: true,
+      ciAwareness: true,
+      autoFixCi: false,
+    },
+  },
+  {
+    id: 'complex-issue',
+    name: 'Complex Issue',
+    description: 'Full analysis with Opus',
+    icon: '🧠',
+    options: {
+      mode: 'build',
+      model: 'opus',
+      maxIterations: 15,
+      autoPush: true,
+      ciAwareness: true,
+      autoFixCi: true,
+    },
+  },
+  {
+    id: 'security-audit',
+    name: 'Security Audit',
+    description: 'Analysis only, no changes',
+    icon: '🔒',
+    options: {
+      mode: 'plan',
+      model: 'opus',
+      maxIterations: 3,
+      autoPush: false,
+      ciAwareness: false,
+      autoFixCi: false,
+    },
+  },
+];
+
+// ============================================================================
 // Filter & Sort Types
 // ============================================================================
 

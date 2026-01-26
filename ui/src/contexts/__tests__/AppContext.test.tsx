@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppProvider, useApp, useAppIssues } from '../AppContext';
 import type { Issue, ProcessingStatus } from '@/lib/types';
+import { DEFAULT_PROCESSING_OPTIONS } from '@/lib/types';
 
 // Helper component to test the context
 function TestComponent({ testFn }: { testFn?: (ctx: ReturnType<typeof useApp>) => void }) {
@@ -334,7 +335,7 @@ describe('AppContext', () => {
       expect(global.fetch).toHaveBeenCalledWith('/api/issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ['test-1'] }),
+        body: JSON.stringify({ ids: ['test-1'], options: DEFAULT_PROCESSING_OPTIONS }),
       });
     });
 

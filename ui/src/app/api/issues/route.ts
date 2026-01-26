@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { fetchIssues, processIssues } from '@/lib/meta-ralph';
+import { fetchIssues, processIssues, DEFAULT_PROCESSING_OPTIONS } from '@/lib/meta-ralph';
+import type { ProcessingOptions } from '@/lib/types';
 
 // In-memory store for processing state
 let processingState = {
@@ -31,7 +32,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { ids } = body as { ids: string[] };
+    const { ids, options } = body as {
+      ids: string[];
+      options?: ProcessingOptions;
+    };
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
@@ -47,18 +51,26 @@ export async function POST(request: Request) {
       );
     }
 
+    // Use provided options or defaults
+    const processingOptions: ProcessingOptions = options || DEFAULT_PROCESSING_OPTIONS;
+
     // Reset and start processing
     processingState = {
       isProcessing: true,
       currentIssueId: ids[0],
-      logs: [`Starting processing of ${ids.length} issue(s)...`],
+      logs: [
+        `Starting processing of ${ids.length} issue(s)...`,
+        `Mode: ${processingOptions.mode} | Model: ${processingOptions.model} | Max iterations: ${processingOptions.maxIterations}`,
+        `Auto-push: ${processingOptions.autoPush} | CI awareness: ${processingOptions.ciAwareness}`,
+      ],
       completed: [],
       failed: [],
     };
 
-    // Start processing in background
+    // Start processing in background with options
     processIssues(
       ids,
+      processingOptions,
       (log) => {
         processingState.logs.push(log);
         // Keep only last 1000 log lines
