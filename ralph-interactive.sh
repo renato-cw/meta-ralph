@@ -13,8 +13,22 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 WHITE='\033[1;37m'
+GRAY='\033[0;90m'
 NC='\033[0m'
+
+# Provider color function
+get_provider_color() {
+    case "$1" in
+        linear)   echo "$BLUE" ;;
+        sentry)   echo "$MAGENTA" ;;
+        codecov)  echo "$GREEN" ;;
+        zeropath) echo "$RED" ;;
+        github)   echo "$WHITE" ;;
+        *)        echo "$GRAY" ;;
+    esac
+}
 
 # Clear screen and show header
 clear
@@ -32,9 +46,9 @@ providers=("linear" "sentry" "codecov" "zeropath" "all")
 select provider in "${providers[@]}"; do
     if [[ -n "$provider" ]]; then
         if [[ "$provider" == "all" ]]; then
-            PROVIDER_FLAG=""
+            PROVIDER_ARGS=()
         else
-            PROVIDER_FLAG="--providers $provider"
+            PROVIDER_ARGS=(--providers "$provider")
         fi
         echo -e "${GREEN}✓ Provider: $provider${NC}"
         break
@@ -44,7 +58,7 @@ done
 # Step 2: Fetch and display issues
 echo ""
 echo -e "${YELLOW}Fetching issues...${NC}"
-issues_json=$(./meta-ralph.sh --dry-run --json $PROVIDER_FLAG 2>/dev/null)
+issues_json=$(./meta-ralph.sh --dry-run --json "${PROVIDER_ARGS[@]}" 2>/dev/null)
 
 if [[ -z "$issues_json" ]] || [[ "$issues_json" == "[]" ]]; then
     echo -e "${RED}No issues found!${NC}"
@@ -107,8 +121,9 @@ while IFS=$'\t' read -r id short_id provider priority severity title; do
         esac
     fi
 
-    printf "${color}%-4s %-14s %-10s %-12s %.40s${NC}\n" "$idx" "$display_id" "$provider" "$priority_label" "$title"
-done < <(echo "$issues_json" | jq -r '.[] | [.id, (.short_id // ""), .provider, (.priority | tostring), (.severity // ""), .title] | @tsv')
+    provider_color=$(get_provider_color "$provider")
+    printf "%-4s %-14s ${provider_color}%-10s${NC} ${color}%-12s${NC} %.40s\n" "$idx" "$display_id" "$provider" "$priority_label" "$title"
+done < <(echo "$issues_json" | jq -r '.[] | [.id, (.short_id // "null"), .provider, (.priority | tostring), (.severity // "null"), (.title // "No title")] | @tsv')
 
 echo ""
 echo -e "${CYAN}Enter issue numbers to process (comma-separated, e.g., 1,3,5)${NC}"
@@ -206,7 +221,7 @@ run_ralph() {
     echo -e "${WHITE}Running in $mode mode...${NC}"
     echo -e "${BLUE}────────────────────────────────────────${NC}"
 
-    RALPH_MODE="$mode" RALPH_MODEL="$MODEL" ./meta-ralph.sh --only-ids "$selected_ids" $PROVIDER_FLAG
+    RALPH_MODE="$mode" RALPH_MODEL="$MODEL" ./meta-ralph.sh --only-ids "$selected_ids" "${PROVIDER_ARGS[@]}"
 }
 
 case "$mode_choice" in

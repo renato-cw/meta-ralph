@@ -71,7 +71,18 @@ provider_fetch() {
     echo "$all_issues" | jq --arg provider "zeropath" '[.[] | {
         id: .id,
         provider: $provider,
-        title: .generatedTitle,
+        title: (
+            .generatedTitle //
+            .title //
+            .summary //
+            (if .vulnClass and .affectedFile then
+                "\(.vulnClass) in \(.affectedFile | split("/") | last)"
+            elif .vulnClass then
+                .vulnClass
+            else
+                "Security Issue"
+            end)
+        ),
         description: .generatedDescription,
         location: .affectedFile,
         severity: (
