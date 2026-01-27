@@ -52,7 +52,7 @@ export function PresetSelector({
             disabled
             className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)] text-sm"
           >
-            <span>\u2699\uFE0F</span>
+            <span>⚙️</span>
             <span>Custom</span>
           </button>
         )}

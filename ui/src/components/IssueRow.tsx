@@ -1,6 +1,7 @@
 'use client';
 
 import type { Issue } from '@/lib/types';
+import { ProviderBadge } from './common/ProviderBadge';
 
 /**
  * Extract repository full name from issue (supports both MultiRepoIssue and metadata).
@@ -85,9 +86,7 @@ export function IssueRow({
       <td className="p-3 text-[var(--muted)]">{index + 1}</td>
       {!hideProvider && (
         <td className="p-3">
-          <span className="px-2 py-1 text-xs rounded bg-[var(--card)] text-[var(--foreground)]">
-            {issue.provider}
-          </span>
+          <ProviderBadge provider={issue.provider} />
         </td>
       )}
       {showRepoColumn && (

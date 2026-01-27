@@ -19,7 +19,27 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Dependencies
+node_modules/
+
+# Next.js build
+ui/.next/
+.next/
+
+# Coverage reports
+ui/coverage/
+coverage/
+
+# TypeScript build info
+*.tsbuildinfo
+ui/next-env.d.ts
+
 # Playwright
 ui/playwright-report/
 ui/test-results/
 ui/.playwright/
+
+# Temporary/personal files
+PROMPT_*.md
+Untitled
+loop.sh

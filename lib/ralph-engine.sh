@@ -232,7 +232,7 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
     # Determine Claude output format
     local claude_opts="--dangerously-skip-permissions"
     if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
-        claude_opts="$claude_opts --output-format=stream-json"
+        claude_opts="$claude_opts --output-format=stream-json --verbose"
     else
         claude_opts="$claude_opts --print"
     fi
@@ -264,31 +264,26 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
 
         # Execute Claude with PRD
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
-            # Streaming mode: parse events as they come
+            # Streaming mode: use process substitution to avoid subshell issues
             local temp_output=$(mktemp)
-            local accumulated_text=""
 
-            # Run Claude and process stream
-            claude $claude_opts \
+            emit_activity "$issue_id" "message" "" "Starting Claude (streaming mode)" "running"
+
+            # Use process substitution - while runs in main shell, Claude output streams through
+            # tee captures to file while we process each line in real-time
+            while IFS= read -r line; do
+                # Parse and emit the event to UI
+                parse_claude_event "$issue_id" "$line"
+                # Also save to temp file for result processing
+                echo "$line" >> "$temp_output"
+            done < <(claude $claude_opts \
                 "$mode_instructions
 
 @$prd_file
 @$progress_file
-" 2>&1 | while IFS= read -r line; do
-                # Parse and emit the event
-                parse_claude_event "$issue_id" "$line"
+" 2>&1)
 
-                # Accumulate for completion detection
-                echo "$line" >> "$temp_output"
-
-                # Extract text content for completion check
-                local content=$(echo "$line" | jq -r '.delta.text // .content // empty' 2>/dev/null)
-                if [[ -n "$content" ]]; then
-                    accumulated_text="$accumulated_text$content"
-                fi
-            done
-
-            # Read accumulated output
+            # Read accumulated output for completion check
             result=$(cat "$temp_output" 2>/dev/null || echo "")
             rm -f "$temp_output"
         else
@@ -308,8 +303,20 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
 
         # Save result to progress
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
-            # In streaming mode, extract text content from JSON
-            echo "$result" | jq -r '.delta.text // .content // empty' 2>/dev/null | tail -20 >> "$progress_file"
+            # In streaming mode, extract text from various JSON event formats
+            # Format 1: {"type":"assistant","message":{"content":[{"text":"..."}]}}
+            # Format 2: {"type":"result","result":"..."}
+            local extracted_text=""
+            extracted_text=$(echo "$result" | jq -r '
+                if .type == "result" and .result then .result
+                elif .type == "assistant" and .message.content then
+                    .message.content[] | select(.type == "text") | .text
+                else empty
+                end
+            ' 2>/dev/null | head -100)
+            if [[ -n "$extracted_text" ]]; then
+                echo "$extracted_text" | tail -20 >> "$progress_file"
+            fi
         else
             echo "$result" | tail -20 >> "$progress_file"
         fi
@@ -318,25 +325,31 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
         # Check if completed
         local check_text="$result"
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
-            # In streaming mode, need to extract text content for marker check
-            check_text=$(echo "$result" | jq -r '.delta.text // .content // .message // empty' 2>/dev/null | tr -d '\n')
+            # In streaming mode, extract text from result event for marker check
+            check_text=$(echo "$result" | jq -r '
+                if .type == "result" and .result then .result
+                elif .type == "assistant" and .message.content then
+                    .message.content[] | select(.type == "text") | .text
+                else empty
+                end
+            ' 2>/dev/null | tr -d '\n')
         fi
 
         if echo "$check_text" | grep -q "$completion_marker"; then
             echo ""
             echo -e "${GREEN}========================================${NC}"
-            echo -e "${GREEN}   SUCCESS! ${mode^} complete at iteration $i${NC}"
+            echo -e "${GREEN}   SUCCESS! $mode complete at iteration $i${NC}"
             echo -e "${GREEN}========================================${NC}"
 
             # Emit final metrics
             emit_metrics "$issue_id" "$i" "$max_iterations" "$iteration_cost" "$iteration_duration" "$total_cost" "$total_duration"
-            emit_activity "$issue_id" "result" "" "SUCCESS: ${mode^} completed at iteration $i" "success" "$total_duration"
+            emit_activity "$issue_id" "result" "" "SUCCESS: $mode completed at iteration $i" "success" "$total_duration"
 
             # Create success flag
             touch .ralph-complete
 
             # Record success
-            echo "### SUCCESS - ${mode^} completed at iteration $i" >> "$progress_file"
+            echo "### SUCCESS - $mode completed at iteration $i" >> "$progress_file"
             echo "" >> "$progress_file"
 
             return 0
@@ -346,7 +359,7 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
         emit_metrics "$issue_id" "$i" "$max_iterations" "$iteration_cost" "$iteration_duration" "$total_cost" "$total_duration"
 
         echo ""
-        echo -e "${YELLOW}${mode^} not complete, trying again...${NC}"
+        echo -e "${YELLOW}$mode not complete, trying again...${NC}"
         echo ""
 
         # Small delay between iterations
@@ -387,10 +400,25 @@ process_issue() {
 
     # ========================================================================
     # MULTI-REPO SUPPORT (PRD-10)
-    # Detect and clone target/context repositories from enriched issue JSON
+    # Enrich issue with repo info at processing time (not at listing time)
     # ========================================================================
 
-    # Extract multi-repo fields from issue JSON (set by providers like Linear)
+    # Check if issue needs enrichment (no target_repo yet, but might reference external repos)
+    local has_target_repo=$(echo "$issue_json" | jq -r '.target_repo.full_name // empty')
+    if [[ -z "$has_target_repo" ]] && [[ -x "$SCRIPT_DIR/lib/issue-parser.sh" ]]; then
+        # Quick check if issue might reference repos
+        if echo "$issue_json" | "$SCRIPT_DIR/lib/issue-parser.sh" check 2>/dev/null | grep -q "yes"; then
+            emit_activity "$issue_id" "message" "" "Analyzing issue for repository references..." "running"
+            local enriched
+            enriched=$(echo "$issue_json" | "$SCRIPT_DIR/lib/issue-parser.sh" enrich 2>/dev/null)
+            if [[ -n "$enriched" ]] && echo "$enriched" | jq -e '.' >/dev/null 2>&1; then
+                issue_json="$enriched"
+                emit_activity "$issue_id" "message" "" "Issue enriched with repository info" "success"
+            fi
+        fi
+    fi
+
+    # Extract multi-repo fields from issue JSON (now potentially enriched)
     local target_repo_full=$(echo "$issue_json" | jq -r '.target_repo.full_name // empty')
     local context_repos_json=$(echo "$issue_json" | jq -c '.context_repos // []')
 
@@ -544,11 +572,12 @@ process_issue() {
             echo -e "${YELLOW}Creating Pull Request...${NC}"
             emit_activity "$issue_id" "push" "" "Creating Pull Request" "running"
 
+            local pr_title=$(provider_pr_title "$issue_json" 2>/dev/null || echo "fix($issue_id): ${issue_title:0:50}")
             local pr_body=$(provider_pr_body "$issue_json" 2>/dev/null || echo "Fix for issue $issue_id")
 
             local pr_url
             pr_url=$(gh pr create \
-                --title "fix: ${issue_title:0:60}" \
+                --title "$pr_title" \
                 --body "$pr_body" \
                 --base "$base_branch" 2>&1) && {
                     echo -e "${GREEN}PR created: $pr_url${NC}"

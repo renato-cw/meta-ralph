@@ -44,7 +44,6 @@ export default function Home() {
     // Processing state
     processing,
     processIssues,
-    processSingleIssue,
 
     // Sort state
     sort,
@@ -155,6 +154,14 @@ export default function Home() {
     if (selectedIds.size === 0) return;
     setIsOptionsOpen(true);
   }, [selectedIds]);
+
+  // Open options panel for a single issue (from detail panel)
+  const handleProcessSingle = useCallback((issueId: string) => {
+    // Deselect all, then select only this issue
+    handleDeselectAll();
+    handleToggle(issueId);
+    setIsOptionsOpen(true);
+  }, [handleDeselectAll, handleToggle]);
 
   // Start processing with the selected options
   const handleStartProcessing = useCallback(async (options: ProcessingOptions) => {
@@ -510,7 +517,7 @@ export default function Home() {
         issue={detailIssue}
         isOpen={isDetailOpen}
         onClose={closeDetailPanel}
-        onProcess={processSingleIssue}
+        onProcess={handleProcessSingle}
         isProcessing={processing.isProcessing}
       />
 

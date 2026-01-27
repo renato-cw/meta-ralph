@@ -23,13 +23,13 @@ export function ModeToggle({ mode, onChange, disabled = false }: ModeToggleProps
       value: 'plan',
       label: 'Plan',
       description: 'Analyze only',
-      icon: '\uD83D\uDCCB',
+      icon: '📋',
     },
     {
       value: 'build',
       label: 'Build',
       description: 'Implement fix',
-      icon: '\uD83D\uDD28',
+      icon: '🔨',
     },
   ];
 

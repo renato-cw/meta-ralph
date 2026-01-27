@@ -167,21 +167,10 @@ provider_fetch() {
         }]
     ')
 
-    # Optionally enrich with multi-repo info (if issue-parser is available)
-    if declare -f enrich_issue_with_repos >/dev/null 2>&1; then
-        # Process each issue through the parser for multi-repo detection
-        echo "$issues" | jq -c '.[]' | while read -r issue; do
-            # Quick check if issue might reference repos
-            if echo "$issue" | "$RALPH_DIR/lib/issue-parser.sh" check 2>/dev/null | grep -q "yes"; then
-                # Enrich with repo info
-                echo "$issue" | "$RALPH_DIR/lib/issue-parser.sh" enrich 2>/dev/null
-            else
-                echo "$issue"
-            fi
-        done | jq -s '.'
-    else
-        echo "$issues"
-    fi
+    # NOTE: Enrichment with Claude moved to process_issue() in ralph-engine.sh
+    # This avoids expensive Claude calls on every page load (dry-run/listing)
+    # The enrich happens only when actually processing an issue
+    echo "$issues"
 }
 
 provider_gen_prd() {
@@ -232,47 +221,85 @@ EOF
 ## Task Description
 $title
 
-## Details
+## Original Details from Linear
 $description
+
+## IMPORTANT: Investigation Phase Required
+
+Before implementing, you MUST first investigate the codebase to understand:
+
+1. **Identify Related Code**: Search for files, functions, or modules related to this task
+2. **Understand Current Implementation**: Read existing code to understand patterns and conventions
+3. **Find Similar Examples**: Look for similar features already implemented as reference
+4. **Identify Dependencies**: Understand what other parts of the code this change might affect
+
+### Investigation Commands to Run:
+- Use \`grep\` or \`rg\` to find related code patterns
+- Use \`find\` to locate relevant files
+- Read existing similar implementations for patterns
 
 ## Requirements
 
 ### Must Have
+- [ ] **Investigate first** - understand codebase before making changes
 - [ ] Complete the task as described
-- [ ] Ensure changes are correct and complete
+- [ ] Follow existing code patterns and conventions
 - [ ] Code must pass linting/build checks
 - [ ] Commit with descriptive message
 
 ### Should Have
-- [ ] Add tests if applicable
+- [ ] Add tests if the codebase has existing test patterns
 - [ ] Update documentation if needed
+- [ ] Consider edge cases
 
 ### Must NOT Do
+- [ ] Do NOT implement without first investigating the codebase
 - [ ] Do NOT make unrelated changes
 - [ ] Do NOT break existing functionality
-- [ ] Do NOT modify files outside the scope of this task
+- [ ] Do NOT introduce new patterns that differ from existing conventions
 
 ## Success Criteria
-1. The task is fully completed
-2. Build/lint checks pass
-3. Changes are committed with clear message
+1. Investigation phase completed - you understand the relevant code
+2. The task is fully completed following existing patterns
+3. Build/lint checks pass
+4. Changes are committed with clear message
 
 ## Instructions for AI Agent
-1. Read and understand the task
+
+### Phase 1: Investigation (REQUIRED)
+1. Read and understand the task description
+2. Search the codebase for related code:
+   - Files that might need modification
+   - Existing patterns for similar features
+   - Configuration files that might be relevant
+3. Create a mental model of what needs to change
+
+### Phase 2: Planning
+4. Based on investigation, identify:
+   - Which files need to be modified
+   - What new files (if any) need to be created
+   - What the implementation approach should be
+
+### Phase 3: Implementation
 EOF
 
     if [[ "$target_repo" != "current" && -n "$target_repo" ]]; then
         cat << EOF
-2. You are working in repository: $target_repo
-3. If context repos exist, use them for reference data only
+5. You are working in repository: $target_repo
+6. If context repos exist, use them for reference data only
 EOF
     fi
 
     cat << EOF
-4. Implement the required changes
-5. Run appropriate build/lint commands for the project type
-6. Commit: \`${action_type}: ${title:0:50}\`
-7. When complete, output: <promise>COMPLETE</promise>
+7. Implement the required changes following existing patterns
+8. Run appropriate build/lint commands for the project type
+9. Commit: \`${action_type}: ${title:0:50}\`
+10. When complete, output: <promise>COMPLETE</promise>
+
+## Notes
+- If the task description is vague, use your investigation to fill in the gaps
+- When in doubt, follow existing code conventions
+- If you find the task is more complex than expected, implement the core functionality first
 EOF
 }
 
@@ -285,6 +312,39 @@ provider_branch_name() {
     safe_id=$(echo "$short_id" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
 
     echo "task/linear-$safe_id"
+}
+
+provider_pr_title() {
+    local issue_json="$1"
+
+    local issue_id=$(echo "$issue_json" | jq -r '.short_id // .id')
+    local title=$(echo "$issue_json" | jq -r '.title')
+    local action_type=$(echo "$issue_json" | jq -r '.parsed_action.type // "fix"')
+
+    # Normalize action_type to conventional commit prefix
+    local prefix
+    case "$action_type" in
+        feat|feature|add|implement) prefix="feat" ;;
+        fix|bug|bugfix|hotfix) prefix="fix" ;;
+        refactor|cleanup|improve) prefix="refactor" ;;
+        docs|documentation) prefix="docs" ;;
+        test|tests|testing) prefix="test" ;;
+        chore|maintenance) prefix="chore" ;;
+        *) prefix="fix" ;;
+    esac
+
+    # Clean up the title: remove common prefixes, lowercase first word
+    local clean_title
+    clean_title=$(echo "$title" | sed -E '
+        s/^\[?[A-Z]+-[0-9]+\]?:?\s*//;   # Remove issue ID prefix like [MTA-123]:
+        s/^(feat|fix|chore|refactor|docs|test)(\([^)]+\))?:?\s*//i;  # Remove conventional commit prefix
+    ')
+
+    # Truncate to reasonable PR title length (50 chars for title part)
+    clean_title="${clean_title:0:50}"
+
+    # Build PR title: prefix(issue_id): description
+    echo "${prefix}(${issue_id}): ${clean_title}"
 }
 
 provider_pr_body() {

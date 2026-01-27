@@ -137,18 +137,25 @@ export function processIssues(
   const env = {
     ...process.env,
     REPO_ROOT: TARGET_REPO,
-    RALPH_STREAM_MODE: 'true',  // Enable streaming events
+    RALPH_STREAM_MODE: 'false',  // Use print mode (streaming has TTY issues when spawned)
     RALPH_MODE: opts.mode,
     RALPH_MODEL: opts.model,
     RALPH_MAX_ITERATIONS: String(opts.maxIterations),
     RALPH_AUTO_PUSH: opts.autoPush ? 'true' : 'false',
   };
 
+  console.log('[meta-ralph] Starting process with args:', args);
+  console.log('[meta-ralph] CWD:', META_RALPH_DIR);
+  console.log('[meta-ralph] RALPH_STREAM_MODE:', env.RALPH_STREAM_MODE);
+
   const proc = spawn('bash', args, { cwd: META_RALPH_DIR, env });
 
   // Track current issue being processed
   let currentIssueId = issueIds[0];
   let lineBuffer = '';
+
+  // Log process start
+  onLog(`[system] Starting meta-ralph for ${issueIds.length} issue(s)...`);
 
   proc.stdout.on('data', (data) => {
     const chunk = data.toString();

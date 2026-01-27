@@ -98,7 +98,7 @@ export function ProcessingOptionsPanel({
           {/* Header */}
           <div className="sticky top-0 bg-[var(--background)] border-b border-[var(--border)] px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-xl">\u2699\uFE0F</span>
+              <span className="text-xl">⚙️</span>
               <div>
                 <h2 className="text-lg font-semibold text-[var(--foreground)]">
                   Processing Options
@@ -214,7 +214,7 @@ export function ProcessingOptionsPanel({
             {warnings.length > 0 && (
               <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4">
                 <div className="flex items-start gap-2">
-                  <span className="text-yellow-500">\u26A0\uFE0F</span>
+                  <span className="text-yellow-500">⚠️</span>
                   <div className="space-y-1">
                     {warnings.map((warning, index) => (
                       <p key={index} className="text-sm text-yellow-300">
@@ -239,7 +239,7 @@ export function ProcessingOptionsPanel({
               onClick={handleStart}
               className="px-6 py-2 rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors flex items-center gap-2"
             >
-              <span>\uD83D\uDE80</span>
+              <span>🚀</span>
               Start Processing
             </button>
           </div>

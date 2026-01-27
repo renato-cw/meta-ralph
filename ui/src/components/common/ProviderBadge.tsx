@@ -26,6 +26,11 @@ const PROVIDER_CONFIG: Record<string, { label: string; icon: string; colors: str
     icon: '🐙',
     colors: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
   },
+  linear: {
+    label: 'Linear',
+    icon: '📋',
+    colors: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  },
 };
 
 const DEFAULT_CONFIG = {

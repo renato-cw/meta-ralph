@@ -22,7 +22,7 @@ source "$SCRIPT_DIR/lib/priority.sh"
 source "$SCRIPT_DIR/lib/ralph-engine.sh"
 
 # Defaults
-PROVIDERS="zeropath,sentry,codecov"
+PROVIDERS="zeropath,sentry,codecov,linear"
 MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-10}"
 MAX_ISSUES=0
 OFFSET=0
@@ -137,9 +137,11 @@ EOF
     esac
 done
 
-# Banner
-echo -e "${MAGENTA}"
-cat << 'EOF'
+# Skip banner and config output in JSON mode
+if [[ "$JSON_OUTPUT" != "true" ]]; then
+    # Banner
+    echo -e "${MAGENTA}"
+    cat << 'EOF'
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                                                                      ║
 ║   ███╗   ███╗███████╗████████╗ █████╗       ██████╗  █████╗ ██╗     ║
@@ -153,17 +155,18 @@ cat << 'EOF'
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 EOF
-echo -e "${NC}"
+    echo -e "${NC}"
 
-echo -e "${CYAN}Configuration:${NC}"
-echo -e "  Providers: $PROVIDERS"
-echo -e "  Max Iterations: $MAX_ITERATIONS"
-echo -e "  Max Issues: $([ "$MAX_ISSUES" -eq 0 ] && echo "unlimited" || echo "$MAX_ISSUES")"
-echo -e "  Offset: $OFFSET"
-echo -e "  Parallel: $PARALLEL"
-echo -e "  Dry Run: $DRY_RUN"
-echo -e "  Base Branch: $BASE_BRANCH"
-echo ""
+    echo -e "${CYAN}Configuration:${NC}"
+    echo -e "  Providers: $PROVIDERS"
+    echo -e "  Max Iterations: $MAX_ITERATIONS"
+    echo -e "  Max Issues: $([ "$MAX_ISSUES" -eq 0 ] && echo "unlimited" || echo "$MAX_ISSUES")"
+    echo -e "  Offset: $OFFSET"
+    echo -e "  Parallel: $PARALLEL"
+    echo -e "  Dry Run: $DRY_RUN"
+    echo -e "  Base Branch: $BASE_BRANCH"
+    echo ""
+fi
 
 # Change to repo root
 cd "$REPO_ROOT"
@@ -178,10 +181,13 @@ fi
 # FETCH ISSUES FROM ALL PROVIDERS
 # ============================================================================
 
-echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Phase 1: Fetching issues from providers${NC}"
-echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
-echo ""
+# Helper to print only in non-JSON mode
+log() { [[ "$JSON_OUTPUT" != "true" ]] && echo -e "$@" || true; }
+
+log "${BLUE}══════════════════════════════════════════════════════════════${NC}"
+log "${BLUE}  Phase 1: Fetching issues from providers${NC}"
+log "${BLUE}══════════════════════════════════════════════════════════════${NC}"
+log ""
 
 all_issues="[]"
 IFS=',' read -ra PROVIDER_LIST <<< "$PROVIDERS"
@@ -189,17 +195,17 @@ IFS=',' read -ra PROVIDER_LIST <<< "$PROVIDERS"
 for provider_name in "${PROVIDER_LIST[@]}"; do
     provider_name=$(echo "$provider_name" | xargs)  # Trim whitespace
 
-    echo -e "${CYAN}📡 Fetching from $provider_name...${NC}"
+    log "${CYAN}📡 Fetching from $provider_name...${NC}"
 
     if ! load_provider "$provider_name"; then
-        echo -e "${YELLOW}⚠️  Provider '$provider_name' not available, skipping${NC}"
+        log "${YELLOW}⚠️  Provider '$provider_name' not available, skipping${NC}"
         continue
     fi
 
     provider_issues=$(provider_fetch 2>/dev/null || echo "[]")
     issue_count=$(echo "$provider_issues" | jq 'length')
 
-    echo -e "${GREEN}   Found $issue_count issues${NC}"
+    log "${GREEN}   Found $issue_count issues${NC}"
 
     if [[ "$issue_count" -gt 0 ]]; then
         all_issues=$(echo "$all_issues" "$provider_issues" | jq -s 'add')
@@ -210,38 +216,38 @@ done
 all_issues=$(echo "$all_issues" | sort_by_priority)
 
 total_issues=$(echo "$all_issues" | jq 'length')
-echo ""
-echo -e "${WHITE}Total issues found: $total_issues${NC}"
-echo ""
+log ""
+log "${WHITE}Total issues found: $total_issues${NC}"
+log ""
 
 # Apply offset
 if [[ "$OFFSET" -gt 0 ]]; then
     all_issues=$(echo "$all_issues" | jq ".[$OFFSET:]")
-    echo -e "${CYAN}Skipping first $OFFSET issues${NC}"
+    log "${CYAN}Skipping first $OFFSET issues${NC}"
 fi
 
 # Apply limit
 if [[ "$MAX_ISSUES" -gt 0 ]]; then
     all_issues=$(echo "$all_issues" | jq ".[:$MAX_ISSUES]")
-    echo -e "${CYAN}Limiting to $MAX_ISSUES issues${NC}"
+    log "${CYAN}Limiting to $MAX_ISSUES issues${NC}"
 fi
 
 # Filter single issue if specified
 if [[ -n "$SINGLE_ISSUE" ]]; then
     all_issues=$(echo "$all_issues" | jq "[.[] | select(.id == \"$SINGLE_ISSUE\" or .short_id == \"$SINGLE_ISSUE\")]")
     if [[ "$(echo "$all_issues" | jq 'length')" -eq 0 ]]; then
-        echo -e "${RED}Issue $SINGLE_ISSUE not found${NC}"
+        log "${RED}Issue $SINGLE_ISSUE not found${NC}"
         exit 1
     fi
-    echo -e "${YELLOW}Processing single issue: $SINGLE_ISSUE${NC}"
+    log "${YELLOW}Processing single issue: $SINGLE_ISSUE${NC}"
 fi
 
-# Filter by specific IDs if --only-ids specified
+# Filter by specific IDs if --only-ids specified (accepts both short_id like SCF-123 or full UUID)
 if [[ -n "$ONLY_IDS" ]]; then
     IFS=',' read -ra ID_LIST <<< "$ONLY_IDS"
     id_filter=$(printf '%s\n' "${ID_LIST[@]}" | jq -R . | jq -s .)
-    all_issues=$(echo "$all_issues" | jq --argjson ids "$id_filter" '[.[] | select(.id as $id | $ids | any(. == $id))]')
-    echo -e "${YELLOW}Filtering to ${#ID_LIST[@]} specific issue(s)${NC}"
+    all_issues=$(echo "$all_issues" | jq --argjson ids "$id_filter" '[.[] | select((.id as $id | $ids | any(. == $id)) or (.short_id as $sid | $ids | any(. == $sid)))]')
+    log "${YELLOW}Filtering to ${#ID_LIST[@]} specific issue(s)${NC}"
 fi
 
 issue_count=$(echo "$all_issues" | jq 'length')
@@ -263,11 +269,11 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo -e "${BLUE}══════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    printf "${WHITE}%-4s %-10s %-8s %-8s %-6s %s${NC}\n" "#" "PROVIDER" "PRIORITY" "SEVERITY" "COUNT" "TITLE"
-    echo "────────────────────────────────────────────────────────────────────────────────"
+    printf "${WHITE}%-4s %-14s %-10s %-8s %-8s %s${NC}\n" "#" "ID" "PROVIDER" "PRIORITY" "SEVERITY" "TITLE"
+    echo "────────────────────────────────────────────────────────────────────────────────────────────"
 
-    echo "$all_issues" | jq -r '.[] | [.provider, (.priority | tostring), .severity, (.count | tostring), .title] | @tsv' | \
-    while IFS=$'\t' read -r provider priority severity count title; do
+    echo "$all_issues" | jq -r '.[] | [(.short_id // .id[0:12]), .provider, (.priority | tostring), .severity, .title] | @tsv' | \
+    while IFS=$'\t' read -r issue_id provider priority severity title; do
         # Color based on priority
         if [[ "$priority" -ge 90 ]]; then
             color="$RED"
@@ -280,7 +286,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
         fi
 
         idx=$((${idx:-0} + 1))
-        printf "${color}%-4s %-10s %-8s %-8s %-6s %.50s${NC}\n" "$idx" "$provider" "$priority" "$severity" "$count" "$title"
+        printf "${color}%-4s %-14s %-10s %-8s %-8s %.45s${NC}\n" "$idx" "$issue_id" "$provider" "$priority" "$severity" "$title"
     done
 
     echo ""
@@ -348,9 +354,9 @@ for (( idx=0; idx<issue_count; idx++ )); do
     mkdir -p "$WORK_DIR"
 
     # Read processing options from environment variables (set by UI)
-    local mode="${RALPH_MODE:-build}"
-    local model="${RALPH_MODEL:-sonnet}"
-    local auto_push="${RALPH_AUTO_PUSH:-true}"
+    mode="${RALPH_MODE:-build}"
+    model="${RALPH_MODEL:-sonnet}"
+    auto_push="${RALPH_AUTO_PUSH:-true}"
 
     # Process the issue with all options
     if process_issue "$issue" "$provider" "$WORK_DIR" "$BASE_BRANCH" "$MAX_ITERATIONS" "$mode" "$model" "$auto_push"; then

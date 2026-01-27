@@ -22,7 +22,7 @@ export function CostEstimateDisplay({
   return (
     <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-lg">\uD83D\uDCB0</span>
+        <span className="text-lg">💰</span>
         <span className="font-medium text-[var(--foreground)]">Estimated Cost</span>
       </div>
       <div className="text-2xl font-bold text-[var(--foreground)]">

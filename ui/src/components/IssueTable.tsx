@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { IssueRow } from './IssueRow';
 import { PageSizeSelector, LoadMoreButton } from './common';
+import { ProviderBadge } from './common/ProviderBadge';
 import { useVirtualList } from '@/hooks/useVirtualList';
 import type { Issue, SortState, SortField } from '@/lib/types';
 
@@ -378,9 +379,7 @@ function VirtualizedTable({
                   {virtualItem.index + 1}
                 </td>
                 <td className="p-3">
-                  <span className="px-2 py-1 text-xs rounded bg-[var(--card)] text-[var(--foreground)]">
-                    {issue.provider}
-                  </span>
+                  <ProviderBadge provider={issue.provider} />
                 </td>
                 {showRepoColumn && (
                   <td className="p-3">
