@@ -13,3 +13,31 @@ export { useVirtualList, usePageSize, PAGE_SIZES, type PageSize } from './useVir
 export { useSavedViews, type UseSavedViewsOptions, type UseSavedViewsReturn } from './useSavedViews';
 export { useHistory, type HistoryFilter, type UseHistoryOptions, type UseHistoryReturn } from './useHistory';
 export { useTags } from './useTags';
+
+// Processing stream hooks (PRD-03)
+export {
+  useProcessingStream,
+  type UseProcessingStreamOptions,
+  type UseProcessingStreamReturn,
+} from './useProcessingStream';
+export {
+  useActivityFeed,
+  type UseActivityFeedOptions,
+  type UseActivityFeedReturn,
+} from './useActivityFeed';
+
+// Processing options hook (PRD-09)
+export {
+  useProcessingOptions,
+  type UseProcessingOptionsOptions,
+  type UseProcessingOptionsReturn,
+} from './useProcessingOptions';
+
+// CI status hook (PRD-07)
+export {
+  useCIStatus,
+  getCIStatusIcon,
+  getCIStatusColor,
+  type UseCIStatusOptions,
+  type UseCIStatusReturn,
+} from './useCIStatus';

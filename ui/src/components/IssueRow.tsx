@@ -1,6 +1,27 @@
 'use client';
 
 import type { Issue } from '@/lib/types';
+import { ProviderBadge } from './common/ProviderBadge';
+
+/**
+ * Extract repository full name from issue (supports both MultiRepoIssue and metadata).
+ */
+function getRepoFullName(issue: Issue): string | null {
+  // Check for target_repo directly on extended issue (MultiRepoIssue)
+  const extendedIssue = issue as Issue & { target_repo?: { fullName?: string; repo?: string } };
+  if (extendedIssue.target_repo?.fullName) {
+    return extendedIssue.target_repo.fullName;
+  }
+  if (extendedIssue.target_repo?.repo) {
+    return extendedIssue.target_repo.repo;
+  }
+  // Check metadata for target_repo (fallback for normalized issues)
+  if (issue.metadata?.target_repo) {
+    const targetRepo = issue.metadata.target_repo as { fullName?: string; full_name?: string; repo?: string };
+    return targetRepo.fullName || targetRepo.full_name || targetRepo.repo || null;
+  }
+  return null;
+}
 
 interface IssueRowProps {
   issue: Issue;
@@ -12,6 +33,8 @@ interface IssueRowProps {
   hideProvider?: boolean;
   /** Hide the severity column (used when grouped by severity) */
   hideSeverity?: boolean;
+  /** Show the repo column (only when multi-repo issues exist) */
+  showRepoColumn?: boolean;
 }
 
 export function IssueRow({
@@ -22,6 +45,7 @@ export function IssueRow({
   onRowClick,
   hideProvider = false,
   hideSeverity = false,
+  showRepoColumn = false,
 }: IssueRowProps) {
   const severityClass = `badge-${issue.severity.toLowerCase()}`;
 
@@ -38,6 +62,8 @@ export function IssueRow({
       onToggle(issue.id);
     }
   };
+
+  const repoName = showRepoColumn ? getRepoFullName(issue) : null;
 
   return (
     <tr
@@ -60,9 +86,21 @@ export function IssueRow({
       <td className="p-3 text-[var(--muted)]">{index + 1}</td>
       {!hideProvider && (
         <td className="p-3">
-          <span className="px-2 py-1 text-xs rounded bg-[var(--card)] text-[var(--foreground)]">
-            {issue.provider}
-          </span>
+          <ProviderBadge provider={issue.provider} />
+        </td>
+      )}
+      {showRepoColumn && (
+        <td className="p-3">
+          {repoName ? (
+            <span className="px-2 py-1 text-xs rounded bg-purple-900/50 text-purple-300 flex items-center gap-1 w-fit">
+              <span>📦</span>
+              <span className="truncate max-w-[120px]" title={repoName}>
+                {repoName.split('/').pop()}
+              </span>
+            </span>
+          ) : (
+            <span className="text-[var(--muted)] text-xs">—</span>
+          )}
         </td>
       )}
       <td className="p-3">

@@ -13,9 +13,10 @@ import { GroupedView, ViewToggle, SavedViews, SaveViewDialog } from '@/component
 import { Dashboard } from '@/components/dashboard';
 import { ProcessingQueue, ProcessingView } from '@/components/queue';
 import { HistoryView } from '@/components/history';
+import { ProcessingOptionsPanel } from '@/components/options';
 import { useSavedViews, useHistory } from '@/hooks';
 import { useApp } from '@/contexts';
-import type { SortField, GroupBy, SavedView, HistoryEntry } from '@/lib/types';
+import type { SortField, GroupBy, SavedView, HistoryEntry, ProcessingOptions } from '@/lib/types';
 
 export default function Home() {
   const {
@@ -43,7 +44,6 @@ export default function Home() {
     // Processing state
     processing,
     processIssues,
-    processSingleIssue,
 
     // Sort state
     sort,
@@ -91,6 +91,7 @@ export default function Home() {
   // Queue panel state
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [queuedIds, setQueuedIds] = useState<string[]>([]);
+  const [currentProcessingOptions, setCurrentProcessingOptions] = useState<ProcessingOptions | undefined>();
 
   // Save view dialog state
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -100,6 +101,9 @@ export default function Home() {
 
   // Processing view state (full-screen dedicated view)
   const [isProcessingViewOpen, setIsProcessingViewOpen] = useState(false);
+
+  // Processing options panel state
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
 
   // History hook
   const {
@@ -145,12 +149,29 @@ export default function Home() {
     toggleSort(field);
   }, [toggleSort]);
 
-  const handleProcess = useCallback(async () => {
+  // Open options panel before processing
+  const handleProcess = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setIsOptionsOpen(true);
+  }, [selectedIds]);
+
+  // Open options panel for a single issue (from detail panel)
+  const handleProcessSingle = useCallback((issueId: string) => {
+    // Deselect all, then select only this issue
+    handleDeselectAll();
+    handleToggle(issueId);
+    setIsOptionsOpen(true);
+  }, [handleDeselectAll, handleToggle]);
+
+  // Start processing with the selected options
+  const handleStartProcessing = useCallback(async (options: ProcessingOptions) => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
+    setIsOptionsOpen(false);
     setQueuedIds(ids);
+    setCurrentProcessingOptions(options); // Store options for display in queue
     setIsProcessingViewOpen(true); // Open full-screen processing view
-    await processIssues(ids);
+    await processIssues(ids, options);
   }, [selectedIds, processIssues]);
 
   const handleToggleQueue = useCallback(() => {
@@ -176,6 +197,26 @@ export default function Home() {
       processing.completed.includes(id) || processing.failed.includes(id)
     ));
   }, [processing.completed, processing.failed]);
+
+  // Execute build mode after plan completes
+  const handleExecuteBuild = useCallback(async (issueIds: string[]) => {
+    if (issueIds.length === 0) return;
+    // Create build options from current options but force mode to 'build'
+    const buildOptions: ProcessingOptions = {
+      ...(currentProcessingOptions || {
+        mode: 'build',
+        model: 'sonnet',
+        maxIterations: 10,
+        autoPush: true,
+        ciAwareness: false,
+        autoFixCi: false,
+      }),
+      mode: 'build', // Force build mode
+    };
+    setQueuedIds(issueIds);
+    setCurrentProcessingOptions(buildOptions);
+    await processIssues(issueIds, buildOptions);
+  }, [currentProcessingOptions, processIssues]);
 
   const handleOpenProcessingView = useCallback(() => {
     setIsProcessingViewOpen(true);
@@ -476,7 +517,7 @@ export default function Home() {
         issue={detailIssue}
         isOpen={isDetailOpen}
         onClose={closeDetailPanel}
-        onProcess={processSingleIssue}
+        onProcess={handleProcessSingle}
         isProcessing={processing.isProcessing}
       />
 
@@ -488,6 +529,7 @@ export default function Home() {
         issues={issues}
         queuedIds={queuedIds}
         logs={processing.logs}
+        processingOptions={currentProcessingOptions}
         onRetryItem={handleRetryItem}
       />
 
@@ -526,9 +568,19 @@ export default function Home() {
         issues={issues}
         queuedIds={queuedIds}
         logs={processing.logs}
+        processingOptions={currentProcessingOptions}
         onRetryItem={handleRetryItem}
         onRemoveItem={handleRemoveFromQueue}
         onCancelAll={handleCancelAll}
+        onExecuteBuild={handleExecuteBuild}
+      />
+
+      {/* Processing Options Panel */}
+      <ProcessingOptionsPanel
+        isOpen={isOptionsOpen}
+        onClose={() => setIsOptionsOpen(false)}
+        selectedIssues={processedIssues.filter((i) => selectedIds.has(i.id))}
+        onStart={handleStartProcessing}
       />
     </div>
   );

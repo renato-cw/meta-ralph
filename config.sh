@@ -45,6 +45,14 @@ export GITHUB_OWNER="${GITHUB_OWNER:-}"
 export GITHUB_REPO="${GITHUB_REPO:-}"
 
 # ============================================================================
+# LINEAR CONFIGURATION (for multi-repo support)
+# ============================================================================
+export LINEAR_API_KEY="${LINEAR_API_KEY:-}"
+export LINEAR_TEAM_ID="${LINEAR_TEAM_ID:-}"
+export LINEAR_STATES="${LINEAR_STATES:-Todo,In Progress}"
+export LINEAR_API_URL="${LINEAR_API_URL:-https://api.linear.app/graphql}"
+
+# ============================================================================
 # CODECOV CONFIGURATION
 # ============================================================================
 # API Configuration
@@ -83,6 +91,24 @@ export TARGET_REPO="${TARGET_REPO:-}"
 export RALPH_FORCE_NEW_BRANCH="${RALPH_FORCE_NEW_BRANCH:-true}"
 
 # ============================================================================
+# WORKSPACE MANAGEMENT (for multi-repo support)
+# ============================================================================
+# Root directory for cloned repositories
+export META_RALPH_WORKSPACE="${META_RALPH_WORKSPACE:-$HOME/.meta-ralph/workspaces}"
+
+# Days before cleaning up unused repos
+export WORKSPACE_CLEANUP_DAYS="${WORKSPACE_CLEANUP_DAYS:-30}"
+
+# ============================================================================
+# DEFAULT PROCESSING OPTIONS
+# ============================================================================
+# Default processing mode: 'plan' (analysis only) or 'build' (implementation)
+export DEFAULT_PROCESSING_MODE="${DEFAULT_PROCESSING_MODE:-build}"
+
+# Default Claude model: 'sonnet' (fast) or 'opus' (capable)
+export DEFAULT_MODEL="${DEFAULT_MODEL:-sonnet}"
+
+# ============================================================================
 # PRIORITY WEIGHTS (0-100)
 # ============================================================================
 export PRIORITY_ZEROPATH_CRITICAL="${PRIORITY_ZEROPATH_CRITICAL:-100}"
@@ -103,6 +129,12 @@ export PRIORITY_CODECOV_CRITICAL="${PRIORITY_CODECOV_CRITICAL:-100}"   # 0-20% c
 export PRIORITY_CODECOV_HIGH="${PRIORITY_CODECOV_HIGH:-80}"            # 21-40% coverage
 export PRIORITY_CODECOV_MEDIUM="${PRIORITY_CODECOV_MEDIUM:-60}"        # 41-60% coverage
 export PRIORITY_CODECOV_LOW="${PRIORITY_CODECOV_LOW:-40}"              # 61-80% coverage
+
+# Linear priorities (1=urgent, 2=high, 3=medium, 4=low)
+export PRIORITY_LINEAR_URGENT="${PRIORITY_LINEAR_URGENT:-95}"
+export PRIORITY_LINEAR_HIGH="${PRIORITY_LINEAR_HIGH:-75}"
+export PRIORITY_LINEAR_MEDIUM="${PRIORITY_LINEAR_MEDIUM:-50}"
+export PRIORITY_LINEAR_LOW="${PRIORITY_LINEAR_LOW:-25}"
 
 # ============================================================================
 # VALIDATION
@@ -136,6 +168,17 @@ validate_config() {
         fi
     fi
 
+    if [[ " $* " =~ " linear " ]]; then
+        if [[ -z "$LINEAR_API_KEY" ]]; then
+            echo "ERROR: LINEAR_API_KEY not set" >&2
+            errors=$((errors + 1))
+        fi
+        if [[ -z "$LINEAR_TEAM_ID" ]]; then
+            echo "ERROR: LINEAR_TEAM_ID not set" >&2
+            errors=$((errors + 1))
+        fi
+    fi
+
     return $errors
 }
 
@@ -148,8 +191,12 @@ config_loaded() {
     echo "  Zeropath: ${ZEROPATH_ORGANIZATION_ID:-(not configured)}"
     echo "  Sentry: ${SENTRY_ORGANIZATION:-}/${SENTRY_PROJECT:-(not configured)}"
     echo "  Codecov: ${CODECOV_OWNER:-}/${CODECOV_REPO:-(not configured)}"
+    echo "  Linear: ${LINEAR_TEAM_ID:-(not configured)}"
     echo "  Max iterations: $RALPH_MAX_ITERATIONS"
     echo "  Base branch: $RALPH_BASE_BRANCH"
+    echo "  Default mode: $DEFAULT_PROCESSING_MODE"
+    echo "  Default model: $DEFAULT_MODEL"
+    echo "  Workspace: $META_RALPH_WORKSPACE"
 }
 
 # Show config if run directly

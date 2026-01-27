@@ -1,10 +1,39 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { IssueRow } from './IssueRow';
 import { PageSizeSelector, LoadMoreButton } from './common';
+import { ProviderBadge } from './common/ProviderBadge';
 import { useVirtualList } from '@/hooks/useVirtualList';
 import type { Issue, SortState, SortField } from '@/lib/types';
+
+/**
+ * Extract repository full name from issue (supports both MultiRepoIssue and metadata).
+ */
+function getRepoFullName(issue: Issue): string | null {
+  // Check for target_repo directly on extended issue (MultiRepoIssue)
+  const extendedIssue = issue as Issue & { target_repo?: { fullName?: string; repo?: string } };
+  if (extendedIssue.target_repo?.fullName) {
+    return extendedIssue.target_repo.fullName;
+  }
+  if (extendedIssue.target_repo?.repo) {
+    return extendedIssue.target_repo.repo;
+  }
+  // Check metadata for target_repo (fallback for normalized issues)
+  if (issue.metadata?.target_repo) {
+    const targetRepo = issue.metadata.target_repo as { fullName?: string; full_name?: string; repo?: string };
+    return targetRepo.fullName || targetRepo.full_name || targetRepo.repo || null;
+  }
+  return null;
+}
+
+/**
+ * Check if any issues have multi-repo target.
+ */
+function hasMultiRepoIssues(issues: Issue[]): boolean {
+  return issues.some((issue) => getRepoFullName(issue) !== null);
+}
 
 /** Threshold for enabling virtualization (number of items) */
 const VIRTUALIZATION_THRESHOLD = 100;
@@ -70,6 +99,7 @@ function TableHeader({
   someSelected,
   onSelectAll,
   onDeselectAll,
+  showRepoColumn,
 }: {
   sort: SortState;
   onSort: (field: SortField) => void;
@@ -77,6 +107,7 @@ function TableHeader({
   someSelected: boolean;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  showRepoColumn: boolean;
 }) {
   return (
     <thead className="sticky top-0 bg-[var(--card)] z-10">
@@ -94,6 +125,9 @@ function TableHeader({
         </th>
         <th className="p-3 w-12 text-[var(--muted)]">#</th>
         <SortableHeader field="provider" label="Provider" currentSort={sort} onSort={onSort} />
+        {showRepoColumn && (
+          <SortableHeader field="repo" label="Repo" currentSort={sort} onSort={onSort} />
+        )}
         <SortableHeader field="priority" label="Priority" currentSort={sort} onSort={onSort} />
         <SortableHeader field="severity" label="Severity" currentSort={sort} onSort={onSort} />
         <SortableHeader field="count" label="Count" currentSort={sort} onSort={onSort} className="text-center" />
@@ -136,6 +170,9 @@ export function IssueTable({
 
   const allSelected = displayItems.length > 0 && selectedIds.size === displayItems.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < displayItems.length;
+
+  // Determine if we should show the repo column (only when multi-repo issues exist)
+  const showRepoColumn = useMemo(() => hasMultiRepoIssues(issues), [issues]);
 
   // Determine if we should show pagination (default: show for 25+ items)
   const shouldShowPagination = showPagination !== undefined
@@ -202,6 +239,7 @@ export function IssueTable({
           onRowClick={onRowClick}
           allSelected={allSelected}
           someSelected={someSelected}
+          showRepoColumn={showRepoColumn}
         />
       ) : (
         // Standard table for smaller lists
@@ -214,6 +252,7 @@ export function IssueTable({
               someSelected={someSelected}
               onSelectAll={onSelectAll}
               onDeselectAll={onDeselectAll}
+              showRepoColumn={showRepoColumn}
             />
             <tbody>
               {displayItems.map((issue, index) => (
@@ -224,6 +263,7 @@ export function IssueTable({
                   selected={selectedIds.has(issue.id)}
                   onToggle={onToggle}
                   onRowClick={onRowClick}
+                  showRepoColumn={showRepoColumn}
                 />
               ))}
             </tbody>
@@ -259,6 +299,7 @@ function VirtualizedTable({
   onRowClick,
   allSelected,
   someSelected,
+  showRepoColumn,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   issues: Issue[];
@@ -271,6 +312,7 @@ function VirtualizedTable({
   onRowClick?: (issue: Issue) => void;
   allSelected: boolean;
   someSelected: boolean;
+  showRepoColumn: boolean;
 }) {
   const virtualizer = useVirtualizer({
     count: issues.length,
@@ -295,6 +337,7 @@ function VirtualizedTable({
           someSelected={someSelected}
           onSelectAll={onSelectAll}
           onDeselectAll={onDeselectAll}
+          showRepoColumn={showRepoColumn}
         />
         <tbody
           style={{
@@ -305,6 +348,7 @@ function VirtualizedTable({
         >
           {virtualItems.map((virtualItem) => {
             const issue = issues[virtualItem.index];
+            const repoName = getRepoFullName(issue);
             return (
               <tr
                 key={issue.id}
@@ -335,10 +379,22 @@ function VirtualizedTable({
                   {virtualItem.index + 1}
                 </td>
                 <td className="p-3">
-                  <span className="px-2 py-1 text-xs rounded bg-[var(--card)] text-[var(--foreground)]">
-                    {issue.provider}
-                  </span>
+                  <ProviderBadge provider={issue.provider} />
                 </td>
+                {showRepoColumn && (
+                  <td className="p-3">
+                    {repoName ? (
+                      <span className="px-2 py-1 text-xs rounded bg-purple-900/50 text-purple-300 flex items-center gap-1 w-fit">
+                        <span>📦</span>
+                        <span className="truncate max-w-[120px]" title={repoName}>
+                          {repoName.split('/').pop()}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-[var(--muted)] text-xs">—</span>
+                    )}
+                  </td>
+                )}
                 <td className="p-3">
                   <span className={`font-mono font-bold ${getPriorityColor(issue.priority)}`}>
                     {issue.priority}

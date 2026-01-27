@@ -13,6 +13,7 @@ Este documento é o plano mestre para implementação de todas as funcionalidade
 | PRD-05 | CI/CD Awareness | Baixa | PRD-01, PRD-04 |
 | PRD-06 | Auto-Atualização IMPLEMENTATION_PLAN | Média | PRD-02 |
 | PRD-07 | Processing Options UI | Alta | PRD-02, PRD-03, PRD-04 |
+| PRD-10 | Multi-Repo Support & Linear Integration | Alta | - |
 
 ## Ordem de Implementação Recomendada
 
@@ -70,6 +71,21 @@ Este documento é o plano mestre para implementação de todas as funcionalidade
 - Detecção automática de falhas
 - Fix automático de CI (opcional)
 
+### Fase 5: Multi-Repo & Linear (PRD-10)
+**Objetivo**: Processar issues que requerem trabalho em outros repositórios
+
+1. Implementar Workspace Manager (clone/pull de repos)
+2. Implementar Issue Parser (extração de repos via Claude)
+3. Criar Linear Provider
+4. Integrar multi-repo no ralph-engine
+5. UI updates (badges, filtros)
+
+**Entregáveis**:
+- Issues do Linear processáveis
+- Workspace automatizado (~/.meta-ralph/workspaces/)
+- PRs criados no repo correto
+- Backward compatible com providers existentes
+
 ## Arquitetura de Componentes
 
 ```
@@ -100,6 +116,23 @@ Este documento é o plano mestre para implementação de todas as funcionalidade
 ## Estrutura de Arquivos
 
 ```
+# Backend (Bash)
+lib/
+├── ralph-engine.sh (modificar - adicionar suporte multi-repo)
+├── provider.sh (existente)
+├── priority.sh (existente)
+├── workspace-manager.sh (novo - clone/pull de repos)
+└── issue-parser.sh (novo - extração de repos via Claude)
+
+providers/
+├── sentry/ (existente)
+├── zeropath/ (existente)
+├── codecov/ (existente)
+└── linear/ (novo)
+    ├── provider.sh
+    └── priority.sh
+
+# Frontend (React/Next.js)
 ui/src/
 ├── components/
 │   ├── queue/
@@ -245,8 +278,9 @@ export interface ImplementationPlan {
 | Fase 2 | 2-3 dias | Options panel, presets |
 | Fase 3 | 1-2 dias | Auto-push, plan viewer |
 | Fase 4 | 2-3 dias | CI integration |
+| Fase 5 | 3-4 dias | Multi-repo, Linear provider |
 
-**Total estimado**: 7-11 dias de desenvolvimento
+**Total estimado**: 10-15 dias de desenvolvimento
 
 ## Riscos e Mitigações
 

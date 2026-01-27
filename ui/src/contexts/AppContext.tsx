@@ -22,6 +22,7 @@ import type {
   Severity,
   IssueStatus,
   GroupBy,
+  ProcessingOptions,
 } from '@/lib/types';
 
 // ============================================================================
@@ -52,8 +53,8 @@ export interface AppContextType {
 
   // Processing state
   processing: ProcessingStatus;
-  processIssues: (ids: string[]) => Promise<void>;
-  processSingleIssue: (issueId: string) => Promise<void>;
+  processIssues: (ids: string[], options?: ProcessingOptions) => Promise<void>;
+  processSingleIssue: (issueId: string, options?: ProcessingOptions) => Promise<void>;
 
   // Sort state (from useSort)
   sort: SortState;
@@ -277,14 +278,14 @@ export function AppProvider({ children }: AppProviderProps) {
   }, []);
 
   // Process issues
-  const processIssues = useCallback(async (ids: string[]) => {
+  const processIssues = useCallback(async (ids: string[], options?: ProcessingOptions) => {
     if (ids.length === 0) return;
 
     try {
       const response = await fetch('/api/issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ ids, options }),
       });
 
       if (!response.ok) {
@@ -299,12 +300,12 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, []);
 
-  const processSingleIssue = useCallback(async (issueId: string) => {
+  const processSingleIssue = useCallback(async (issueId: string, options?: ProcessingOptions) => {
     try {
       const response = await fetch('/api/issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [issueId] }),
+        body: JSON.stringify({ ids: [issueId], options }),
       });
 
       if (!response.ok) {

@@ -11,8 +11,12 @@ interface QueueItemProps {
   completedAt?: string;
   prUrl?: string;
   error?: string;
+  /** Whether the push failed (processing succeeded but push didn't) */
+  pushFailed?: boolean;
   onCancel?: () => void;
   onRetry?: () => void;
+  /** Callback to retry a failed push */
+  onRetryPush?: () => void;
 }
 
 const STATUS_STYLES: Record<QueueItemStatus, { bg: string; text: string; icon: string }> = {
@@ -95,8 +99,10 @@ export function QueueItem({
   completedAt,
   prUrl,
   error,
+  pushFailed,
   onCancel,
   onRetry,
+  onRetryPush,
 }: QueueItemProps) {
   const styles = STATUS_STYLES[status];
   const duration = formatDuration(startedAt, completedAt);
@@ -145,6 +151,16 @@ export function QueueItem({
               View PR
             </a>
           )}
+
+          {/* Push failed warning */}
+          {pushFailed && !prUrl && (
+            <div className="mt-2 text-xs text-yellow-400 bg-yellow-900/20 rounded p-2 flex items-center gap-2">
+              <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>Push failed - changes committed but not pushed</span>
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -169,6 +185,19 @@ export function QueueItem({
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          )}
+
+          {/* Retry push button for completed items with failed push */}
+          {pushFailed && !prUrl && onRetryPush && (
+            <button
+              onClick={onRetryPush}
+              className="p-1.5 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/20 rounded transition-colors"
+              title="Retry push"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
               </svg>
             </button>
           )}
