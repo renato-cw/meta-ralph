@@ -101,7 +101,7 @@ provider_fetch() {
             else 20
             end
         ),
-        permalink: "https://zeropath.com",
+        permalink: "https://zeropath.com/app/issues/\(.id)",
         metadata: {
             vulnClass: .vulnClass,
             codeSnippet: .codeSnippet,
@@ -206,6 +206,16 @@ provider_branch_name() {
     echo "sec/zeropath-${issue_id:0:12}"
 }
 
+provider_pr_title() {
+    local issue_json="$1"
+    local title=$(echo "$issue_json" | jq -r '.title')
+
+    # Truncate title if too long (max 72 chars for PR title)
+    local truncated_title="${title:0:56}"  # 56 + 16 for "sec(zeropath): " = 72
+
+    echo "sec(zeropath): $truncated_title"
+}
+
 provider_pr_body() {
     local issue_json="$1"
 
@@ -214,11 +224,12 @@ provider_pr_body() {
     local severity=$(echo "$issue_json" | jq -r '.severity')
     local raw_severity=$(echo "$issue_json" | jq -r '.raw_severity')
     local vuln_class=$(echo "$issue_json" | jq -r '.metadata.vulnClass // "Security Issue"')
+    local issue_url="https://zeropath.com/app/issues/$issue_id"
 
     cat << EOF
 ## Security Fix - Zeropath Issue
 
-**Issue ID:** $issue_id
+**Zeropath Issue:** [$issue_id]($issue_url)
 **Vulnerability:** $vuln_class
 **Severity:** $severity ($raw_severity)
 
