@@ -16,6 +16,9 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+GRAY='\033[0;90m'
 NC='\033[0m'
 
 # ============================================================================
@@ -110,14 +113,45 @@ parse_claude_event() {
             if [[ "$content_type" == "tool_use" ]]; then
                 local tool_name=$(echo "$json_line" | jq -r '.content_block.name // "unknown"')
                 emit_activity "$issue_id" "tool" "$tool_name" "Starting $tool_name" "running"
+                # Human-readable output for CLI
+                case "$tool_name" in
+                    "Read"|"Glob"|"Grep")
+                        echo -e "  ${BLUE}🔍 $tool_name${NC}" ;;
+                    "Write"|"Edit")
+                        echo -e "  ${YELLOW}✏️  $tool_name${NC}" ;;
+                    "Bash")
+                        echo -e "  ${MAGENTA}⚡ Bash${NC}" ;;
+                    "Task")
+                        echo -e "  ${CYAN}🚀 Spawning subagent${NC}" ;;
+                    "TodoWrite")
+                        echo -e "  ${GREEN}📝 Updating todos${NC}" ;;
+                    *)
+                        echo -e "  ${GRAY}🔧 $tool_name${NC}" ;;
+                esac
             fi
             ;;
         "content_block_stop")
             # Tool completed - could track tool completion here
             ;;
+        "content_block_delta")
+            # Show tool input details (file paths, commands, etc.)
+            local delta_type=$(echo "$json_line" | jq -r '.delta.type // empty')
+            if [[ "$delta_type" == "input_json_delta" ]]; then
+                local partial=$(echo "$json_line" | jq -r '.delta.partial_json // empty')
+                if [[ -n "$partial" ]]; then
+                    local file_path=$(echo "$partial" | jq -r '.file_path // .path // empty' 2>/dev/null)
+                    local command=$(echo "$partial" | jq -r '.command // empty' 2>/dev/null)
+                    local pattern=$(echo "$partial" | jq -r '.pattern // empty' 2>/dev/null)
+                    [[ -n "$file_path" ]] && echo -e "     ${GRAY}→ $file_path${NC}"
+                    [[ -n "$command" ]] && echo -e "     ${GRAY}→ $command${NC}"
+                    [[ -n "$pattern" ]] && echo -e "     ${GRAY}→ $pattern${NC}"
+                fi
+            fi
+            ;;
         "message_start")
             local model=$(echo "$json_line" | jq -r '.message.model // "claude"')
             emit_activity "$issue_id" "message" "" "Claude ($model) started processing" "running"
+            echo -e "  ${CYAN}🤖 Claude ($model) processing...${NC}"
             ;;
         "message_stop"|"message_delta")
             # Message completed
@@ -133,10 +167,12 @@ parse_claude_event() {
             # Estimate cost (Sonnet: $3/$15 per 1M tokens)
             local cost=$(echo "scale=6; ($input_tokens * 0.000003) + ($output_tokens * 0.000015)" | bc 2>/dev/null || echo "0")
             emit_activity "$issue_id" "result" "" "Tokens: $input_tokens in, $output_tokens out (cost: \$$cost)" "success"
+            echo -e "  ${GRAY}💰 Cost: \$$cost | Tokens: ${input_tokens}in/${output_tokens}out${NC}"
             ;;
         "error")
             local error_msg=$(echo "$json_line" | jq -r '.error.message // "Unknown error"')
             emit_activity "$issue_id" "error" "" "$error_msg" "error"
+            echo -e "  ${RED}❌ Error: $error_msg${NC}"
             ;;
     esac
 }
@@ -239,7 +275,7 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
 
     # Add model flag if specified and not default
     if [[ "$model" == "opus" ]]; then
-        claude_opts="$claude_opts --model claude-opus-4-5-20250514"
+        claude_opts="$claude_opts --model claude-opus-4-5-20251101"
     fi
 
     # Main loop
