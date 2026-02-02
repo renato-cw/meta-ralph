@@ -458,6 +458,9 @@ ralph_fix_loop() {
     local work_dir
     work_dir="$(dirname "$prd_file")"
 
+    # Define implementation plan file path (unique per issue)
+    local impl_plan_file="$work_dir/IMPLEMENTATION_PLAN.md"
+
     local iteration_start_time
 
     # Initialize cost tracking
@@ -507,9 +510,16 @@ ralph_fix_loop() {
     if [[ "$mode" == "plan" ]]; then
         mode_instructions="You are analyzing an issue to create and refine an implementation plan. DO NOT make code changes.
 
+## IMPORTANT: Plan File Location
+
+The implementation plan for THIS SPECIFIC ISSUE must be stored at:
+\`$impl_plan_file\`
+
+This is a unique file for this issue - do NOT create IMPLEMENTATION_PLAN.md in any other location.
+
 ## Your Task
 
-If IMPLEMENTATION_PLAN.md exists, READ IT FIRST. Your job is to REFINE and IMPROVE the existing plan, not start from scratch.
+If the plan file exists (it will be provided in context), READ IT FIRST. Your job is to REFINE and IMPROVE the existing plan, not start from scratch.
 
 ## Iteration Strategy
 
@@ -521,12 +531,12 @@ Each iteration should go DEEPER:
 ## Instructions
 
 1. Read the PRD to understand the issue
-2. If IMPLEMENTATION_PLAN.md exists:
+2. If the plan file exists in context:
    - Review what was already discovered
    - Identify GAPS or UNCERTAINTIES in the current plan
    - Search code to validate/invalidate assumptions
    - Add newly discovered files or considerations
-3. If IMPLEMENTATION_PLAN.md doesn't exist, create it
+3. If the plan file doesn't exist, create it at: \`$impl_plan_file\`
 4. Use parallel subagents (up to 100) to search the codebase thoroughly
 5. Look for:
    - Files that need modification (use Grep/Glob extensively)
@@ -535,7 +545,7 @@ Each iteration should go DEEPER:
    - Potential side effects or breaking changes
    - TODOs, FIXMEs, or existing workarounds related to this issue
 
-## IMPLEMENTATION_PLAN.md Structure
+## Plan File Structure
 
 \`\`\`markdown
 # Implementation Plan: [Issue Title]
@@ -576,12 +586,20 @@ Each iteration should go DEEPER:
 
 ## CRITICAL RULES
 
-1. DO NOT modify any code files - only IMPLEMENTATION_PLAN.md
-2. DO NOT assume something exists - SEARCH and confirm
-3. DO NOT repeat previous discoveries - BUILD ON THEM
-4. Each iteration MUST add new information or mark something as validated"
+1. DO NOT modify any code files - only the plan file at \`$impl_plan_file\`
+2. DO NOT create IMPLEMENTATION_PLAN.md anywhere else - use ONLY the path above
+3. DO NOT assume something exists - SEARCH and confirm
+4. DO NOT repeat previous discoveries - BUILD ON THEM
+5. Each iteration MUST add new information or mark something as validated"
     else
         mode_instructions="You are a senior engineer implementing a fix. Your goal is COMPLETE, WORKING code - no stubs or placeholders.
+
+## IMPORTANT: Plan File Location
+
+If an implementation plan exists for this issue, it will be at:
+\`$impl_plan_file\`
+
+This is the unique plan file for THIS SPECIFIC ISSUE. Update it as you make progress.
 
 ## Pre-Implementation (CRITICAL)
 
@@ -595,11 +613,11 @@ Before writing ANY code:
 
 1. Read the PRD to understand the issue
 2. Read progress.txt to see what was already tried
-3. If IMPLEMENTATION_PLAN.md exists:
+3. If the plan file exists (provided in context):
    - Find the next unchecked item
    - Implement it COMPLETELY (no TODOs, no placeholders)
-   - Mark as complete: \`- [ ]\` → \`- [x]\`
-   - Document discoveries in the plan
+   - Mark as complete: \`- [ ]\` → \`- [x]\` in the plan file
+   - Document discoveries in the plan file
 4. If no plan exists, analyze and fix directly
 
 ## Quality Standards
@@ -640,7 +658,7 @@ Before finishing, verify:
 
 ## When You Discover Issues
 
-- Document in IMPLEMENTATION_PLAN.md immediately
+- Document in the plan file at \`$impl_plan_file\` immediately
 - Fix unrelated bugs you notice (don't ignore them)
 - Update progress.txt with learnings
 - If blocked, try alternative approach before giving up
@@ -651,7 +669,8 @@ Before finishing, verify:
 2. NEVER push --force
 3. NEVER leave placeholders/TODOs in new code
 4. ALWAYS search before implementing
-5. ALWAYS run tests before committing"
+5. ALWAYS run tests before committing
+6. ALWAYS use the specific plan file path above, NOT a generic IMPLEMENTATION_PLAN.md"
     fi
 
     # Determine Claude output format
@@ -701,7 +720,7 @@ Before finishing, verify:
 @$progress_file"
 
         # For plan mode, include IMPLEMENTATION_PLAN.md if it exists
-        local impl_plan_file="$work_dir/IMPLEMENTATION_PLAN.md"
+        # Note: impl_plan_file is defined at the start of ralph_fix_loop
         if [[ "$mode" == "plan" && -f "$impl_plan_file" ]]; then
             context_files="$context_files
 @$impl_plan_file"
