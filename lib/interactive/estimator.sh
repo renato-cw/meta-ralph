@@ -118,7 +118,7 @@ estimator_estimate_cost() {
 
 # Estimate time for a number of issues
 # Args: issue_count, iterations, mode
-# Returns: "min|max" time in seconds
+# Returns: "min|max" time in seconds (integers)
 estimator_estimate_time() {
     local issue_count="${1:-1}"
     local iterations="${2:-10}"
@@ -137,14 +137,18 @@ estimator_estimate_time() {
         plan+build) mode_mult=1.5 ;;
     esac
 
-    # Calculate estimate
-    local estimate=$(echo "scale=0; $base_time * $issue_count * $iter_factor * $mode_mult" | bc -l 2>/dev/null || echo "0")
+    # Calculate estimate and convert to integer (remove decimal part)
+    local estimate=$(echo "scale=0; ($base_time * $issue_count * $iter_factor * $mode_mult) / 1" | bc 2>/dev/null || echo "0")
 
-    # Return min-max range (±50%)
-    local min=$(echo "scale=0; $estimate * 0.5" | bc -l 2>/dev/null || echo "0")
-    local max=$(echo "scale=0; $estimate * 2.0" | bc -l 2>/dev/null || echo "0")
+    # Return min-max range (±50%) as integers
+    local min=$(echo "scale=0; ($estimate * 0.5) / 1" | bc 2>/dev/null || echo "0")
+    local max=$(echo "scale=0; ($estimate * 2.0) / 1" | bc 2>/dev/null || echo "0")
 
-    echo "$min|$max"
+    # Ensure we return clean integers (strip any remaining decimals)
+    min="${min%.*}"
+    max="${max%.*}"
+
+    echo "${min:-0}|${max:-0}"
 }
 
 # ============================================================================
@@ -157,12 +161,21 @@ format_time_range() {
     local min_sec="$1"
     local max_sec="$2"
 
-    local min_min=$((min_sec / 60))
-    local max_min=$((max_sec / 60))
+    # Ensure we have integers (strip decimal part if any)
+    min_sec="${min_sec%.*}"
+    max_sec="${max_sec%.*}"
 
-    if [[ $max_min -lt 1 ]]; then
+    # Default to 0 if empty
+    min_sec="${min_sec:-0}"
+    max_sec="${max_sec:-0}"
+
+    # Use bc for division to avoid bash arithmetic issues
+    local min_min=$(echo "$min_sec / 60" | bc 2>/dev/null || echo "0")
+    local max_min=$(echo "$max_sec / 60" | bc 2>/dev/null || echo "0")
+
+    if [[ "$max_min" -lt 1 ]]; then
         echo "<1 minute"
-    elif [[ $min_min -eq $max_min ]]; then
+    elif [[ "$min_min" -eq "$max_min" ]]; then
         echo "~${min_min} minutes"
     else
         echo "${min_min}-${max_min} minutes"
