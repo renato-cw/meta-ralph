@@ -114,7 +114,10 @@ emit_ralph_event() {
     local event_type="$2"
     local payload="$3"
 
-    if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
+    # RALPH_JSON_EVENTS controls whether to emit JSON events (for web UI)
+    # RALPH_STREAM_MODE controls verbose CLI output (human-readable)
+    # When running from CLI with verbose, we want human output but not JSON spam
+    if [[ "${RALPH_JSON_EVENTS:-false}" == "true" ]]; then
         echo "RALPH_EVENT:{\"type\":\"$event_type\",\"issueId\":\"$issue_id\",\"payload\":$payload}"
     fi
 }
@@ -216,9 +219,16 @@ parse_claude_event() {
             # Tool completed - could track tool completion here
             ;;
         "content_block_delta")
-            # Show tool input details (file paths, commands, etc.)
             local delta_type=$(echo "$json_line" | jq -r '.delta.type // empty')
-            if [[ "$delta_type" == "input_json_delta" ]]; then
+            if [[ "$delta_type" == "text_delta" ]]; then
+                # Claude's thinking/explanations - show streaming text
+                local text=$(echo "$json_line" | jq -r '.delta.text // empty')
+                if [[ -n "$text" ]]; then
+                    # Print without newline to show streaming effect
+                    echo -ne "${GREEN}$text${NC}"
+                fi
+            elif [[ "$delta_type" == "input_json_delta" ]]; then
+                # Tool input details (file paths, commands, etc.)
                 local partial=$(echo "$json_line" | jq -r '.delta.partial_json // empty')
                 if [[ -n "$partial" ]]; then
                     local file_path=$(echo "$partial" | jq -r '.file_path // .path // empty' 2>/dev/null)
@@ -229,6 +239,24 @@ parse_claude_event() {
                     [[ -n "$pattern" ]] && echo -e "     ${GRAY}→ $pattern${NC}"
                 fi
             fi
+            ;;
+        "assistant")
+            # Assistant completed message - show summary
+            local content=$(echo "$json_line" | jq -r '.message.content[]? | select(.type == "text") | .text // empty' 2>/dev/null)
+            if [[ -n "$content" ]]; then
+                echo ""
+                echo -e "  ${GREEN}💬 $content${NC}"
+            fi
+            ;;
+        "system")
+            # System messages from Claude
+            local system_msg=$(echo "$json_line" | jq -r '.message // empty')
+            [[ -n "$system_msg" ]] && echo -e "  ${CYAN}ℹ️  $system_msg${NC}"
+            ;;
+        "error")
+            # Error messages
+            local error_msg=$(echo "$json_line" | jq -r '.error.message // .message // "Unknown error"')
+            echo -e "  ${RED}❌ $error_msg${NC}"
             ;;
         "message_start")
             local model=$(echo "$json_line" | jq -r '.message.model // "claude"')
