@@ -15,6 +15,9 @@ source "$SCRIPT_DIR/lib/workspace-manager.sh" 2>/dev/null || true
 # This enables loading animation while waiting for Claude response
 source "$SCRIPT_DIR/lib/interactive/ui.sh" 2>/dev/null || true
 
+# Source interactive summary for failure analysis (optional)
+source "$SCRIPT_DIR/lib/interactive/summary.sh" 2>/dev/null || true
+
 # ============================================================================
 # LOADING SPINNER
 # ============================================================================
@@ -148,6 +151,90 @@ accumulate_iteration_cost() {
         done < "$ITERATION_COST_FILE"
         # Clear the temp file for next iteration
         > "$ITERATION_COST_FILE"
+    fi
+}
+
+# ============================================================================
+# FAILURE ANALYSIS
+# ============================================================================
+
+# Analyze failure and extract useful information
+# Args: progress_file, iterations_done, max_iterations
+analyze_failure() {
+    local progress_file="$1"
+    local iterations="$2"
+    local max_iterations="$3"
+    local issue_id="${4:-unknown}"
+
+    # Try to extract last error from progress file
+    local last_error=""
+    if [[ -f "$progress_file" ]]; then
+        # Look for error patterns in progress file
+        last_error=$(grep -iE "(error|fail|exception|panic|crash|rejected)" "$progress_file" 2>/dev/null | tail -1 || echo "")
+        if [[ -z "$last_error" ]]; then
+            # Get last substantive line
+            last_error=$(grep -v "^$\|^#\|^===" "$progress_file" 2>/dev/null | tail -1 || echo "No error captured")
+        fi
+    fi
+
+    # Calculate rough progress percentage based on iterations
+    local progress_pct=0
+    if [[ "$max_iterations" -gt 0 ]]; then
+        progress_pct=$((iterations * 100 / max_iterations))
+    fi
+
+    # Generate suggestions based on context
+    local suggestions=()
+
+    # Analyze error type and suggest accordingly
+    if echo "$last_error" | grep -qi "test"; then
+        suggestions+=("Review test expectations vs actual behavior")
+        suggestions+=("Check if mock data or fixtures need updating")
+    fi
+
+    if echo "$last_error" | grep -qi "build\|compile\|lint"; then
+        suggestions+=("Check for syntax errors in modified files")
+        suggestions+=("Verify import statements are correct")
+    fi
+
+    if echo "$last_error" | grep -qi "permission\|denied\|auth"; then
+        suggestions+=("Verify authentication tokens are valid")
+        suggestions+=("Check repository access permissions")
+    fi
+
+    # Always add generic suggestions
+    if [[ $iterations -lt $((max_iterations / 2)) ]]; then
+        suggestions+=("Try running with more iterations (current: $iterations)")
+    fi
+
+    suggestions+=("Review logs in progress file for detailed error trace")
+    suggestions+=("Consider simplifying the issue scope")
+
+    # Display failure analysis using summary module if available
+    if declare -f summary_failure_analysis >/dev/null 2>&1; then
+        summary_failure_analysis "$issue_id" "$last_error" "$iterations" "$progress_pct" "${suggestions[@]}"
+    else
+        # Fallback: simple failure display
+        echo ""
+        echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║${NC}  ${YELLOW}⚠️  ISSUE NOT RESOLVED - FAILURE ANALYSIS${NC}                   ${RED}║${NC}"
+        echo -e "${RED}╠══════════════════════════════════════════════════════════════╣${NC}"
+        printf "${RED}║${NC}  ${WHITE}Issue:${NC}     %-50s ${RED}║${NC}\n" "$issue_id"
+        printf "${RED}║${NC}  ${WHITE}Attempts:${NC}  %-50s ${RED}║${NC}\n" "$iterations iterations"
+        printf "${RED}║${NC}  ${WHITE}Progress:${NC}  %-50s ${RED}║${NC}\n" "${progress_pct}%"
+        echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
+        printf "${RED}║${NC}  ${WHITE}Last Error:${NC}                                                ${RED}║${NC}\n"
+        # Truncate error to fit in box
+        local truncated_error="${last_error:0:54}"
+        printf "${RED}║${NC}    ${GRAY}%-56s${NC} ${RED}║${NC}\n" "$truncated_error"
+        echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
+        printf "${RED}║${NC}  ${WHITE}Suggestions:${NC}                                               ${RED}║${NC}\n"
+        for suggestion in "${suggestions[@]}"; do
+            local truncated_sug="${suggestion:0:54}"
+            printf "${RED}║${NC}    ${CYAN}•${NC} %-54s ${RED}║${NC}\n" "$truncated_sug"
+        done
+        echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
     fi
 }
 
@@ -952,6 +1039,10 @@ process_issue() {
     else
         echo ""
         echo -e "${RED}Issue $issue_id NOT resolved after $max_iterations attempts${NC}"
+
+        # Display failure analysis
+        analyze_failure "$progress_file" "$CURRENT_ITERATION" "$max_iterations" "$issue_id"
+
         emit_error "$issue_id" "Issue not resolved after $max_iterations attempts"
         return 1
     fi

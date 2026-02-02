@@ -6,63 +6,84 @@
 INTERACTIVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$INTERACTIVE_DIR/ui.sh"
 
+# Source estimator for cost/time estimates (optional)
+source "$INTERACTIVE_DIR/estimator.sh" 2>/dev/null || true
+
 # ============================================================================
-# WIZARD STATE
+# WIZARD STATE (bash 3.x compatible - no associative arrays)
 # ============================================================================
 
-# Step definitions
-declare -a WIZARD_STEPS=(
-    "profile"
-    "provider"
-    "issues"
-    "mode"
-    "model"
-    "iterations"
-    "verbose"
-    "confirm"
-)
+# Step definitions (indexed array works in bash 3.x)
+WIZARD_STEPS="profile provider issues mode model iterations verbose confirm"
+WIZARD_STEPS_COUNT=8
 
 # Current step index (0-based)
 WIZARD_CURRENT_STEP=0
 
-# State storage (associative arrays for step data)
-declare -A WIZARD_STATE
+# State storage using prefixed variables (bash 3.x compatible)
+# Instead of WIZARD_STATE["key"]="value", we use WIZARD_STATE_key="value"
 
 # ============================================================================
-# STATE MANAGEMENT
+# STATE MANAGEMENT (bash 3.x compatible)
 # ============================================================================
 
 # Set wizard state value
 # Usage: wizard_set "key" "value"
 wizard_set() {
-    WIZARD_STATE["$1"]="$2"
+    local key="$1"
+    local value="$2"
+    eval "WIZARD_STATE_${key}=\"\$value\""
 }
 
 # Get wizard state value
 # Usage: wizard_get "key"
 wizard_get() {
-    echo "${WIZARD_STATE[$1]:-}"
+    local key="$1"
+    eval "echo \"\${WIZARD_STATE_${key}:-}\""
 }
 
 # Check if state exists
 # Usage: wizard_has "key"
 wizard_has() {
-    [[ -n "${WIZARD_STATE[$1]:-}" ]]
+    local key="$1"
+    local value
+    eval "value=\"\${WIZARD_STATE_${key}:-}\""
+    [[ -n "$value" ]]
 }
 
 # Clear all state
 wizard_clear() {
-    WIZARD_STATE=()
+    # Clear known state variables
+    unset WIZARD_STATE_profile WIZARD_STATE_profile_name
+    unset WIZARD_STATE_provider WIZARD_STATE_provider_args
+    unset WIZARD_STATE_issues_json WIZARD_STATE_selected_ids WIZARD_STATE_selected_count
+    unset WIZARD_STATE_mode WIZARD_STATE_model
+    unset WIZARD_STATE_plan_iterations WIZARD_STATE_build_iterations WIZARD_STATE_max_iterations
+    unset WIZARD_STATE_stream_mode
     WIZARD_CURRENT_STEP=0
 }
 
 # ============================================================================
-# NAVIGATION
+# NAVIGATION (bash 3.x compatible)
 # ============================================================================
+
+# Get step name by index
+_wizard_get_step() {
+    local idx="$1"
+    local i=0
+    for step in $WIZARD_STEPS; do
+        if [[ $i -eq $idx ]]; then
+            echo "$step"
+            return 0
+        fi
+        i=$((i + 1))
+    done
+    echo ""
+}
 
 # Get current step name
 wizard_current_step_name() {
-    echo "${WIZARD_STEPS[$WIZARD_CURRENT_STEP]}"
+    _wizard_get_step "$WIZARD_CURRENT_STEP"
 }
 
 # Get current step number (1-based for display)
@@ -72,12 +93,12 @@ wizard_current_step_number() {
 
 # Get total steps
 wizard_total_steps() {
-    echo "${#WIZARD_STEPS[@]}"
+    echo "$WIZARD_STEPS_COUNT"
 }
 
 # Go to next step
 wizard_next() {
-    if [[ $WIZARD_CURRENT_STEP -lt $((${#WIZARD_STEPS[@]} - 1)) ]]; then
+    if [[ $WIZARD_CURRENT_STEP -lt $((WIZARD_STEPS_COUNT - 1)) ]]; then
         WIZARD_CURRENT_STEP=$((WIZARD_CURRENT_STEP + 1))
         return 0
     fi
@@ -98,12 +119,12 @@ wizard_back() {
 wizard_goto() {
     local target="$1"
     local i=0
-    for step in "${WIZARD_STEPS[@]}"; do
+    for step in $WIZARD_STEPS; do
         if [[ "$step" == "$target" ]]; then
             WIZARD_CURRENT_STEP=$i
             return 0
         fi
-        ((i++))
+        i=$((i + 1))
     done
     return 1
 }
@@ -194,17 +215,24 @@ wizard_step_profile() {
     local profiles_file=$(find_profiles_file 2>/dev/null || true)
 
     if [[ -n "$profiles_file" ]]; then
-        # Build profile list
-        declare -a profile_names=()
+        # Build profile list (bash 3.x compatible - use newline-separated string)
+        local profile_names_str=""
+        local profile_count=0
         while IFS= read -r p; do
-            profile_names+=("$p")
+            if [[ -n "$profile_names_str" ]]; then
+                profile_names_str="$profile_names_str
+$p"
+            else
+                profile_names_str="$p"
+            fi
+            profile_count=$((profile_count + 1))
         done < <(list_profiles)
 
         # Display menu
         print_menu_start
 
         local idx=1
-        for profile in "${profile_names[@]}"; do
+        echo "$profile_names_str" | while IFS= read -r profile; do
             local gh=$(get_profile_setting "$profile" "github" 2>/dev/null)
             local ln=$(get_profile_setting "$profile" "linear" 2>/dev/null)
             local st=$(get_profile_setting "$profile" "sentry" 2>/dev/null)
@@ -218,8 +246,9 @@ wizard_step_profile() {
             [[ -n "$gh" ]] && providers+=" ${WHITE}◆${NC}"
 
             print_menu_item "$idx" "$profile" "${gh:-}" "$providers"
-            ((idx++))
+            idx=$((idx + 1))
         done
+        idx=$((profile_count + 1))
 
         print_menu_separator
 
@@ -258,7 +287,8 @@ wizard_step_profile() {
                     print_warning "Please restart to use the new profile"
                     return 2
                 else
-                    local selected_profile="${profile_names[$((selection - 1))]}"
+                    # Get profile name by line number (bash 3.x compatible)
+                    local selected_profile=$(echo "$profile_names_str" | sed -n "${selection}p")
                     load_profile "$selected_profile"
                     wizard_set "profile" "$selected_profile"
                     wizard_set "profile_name" "$selected_profile"
@@ -363,12 +393,20 @@ wizard_step_issues() {
     echo -e "${WHITE}#    ID             PROVIDER   PRIORITY     TITLE${NC}"
     draw_line 78 "─" "$GRAY"
 
-    declare -a issue_ids
+    # Build issue IDs list (bash 3.x compatible - newline separated)
+    local issue_ids_str=""
     local idx=0
 
     while IFS=$'\t' read -r id short_id provider priority severity title; do
         idx=$((idx + 1))
-        issue_ids[$idx]="$id"
+
+        # Append to issue IDs string (1-indexed, so line 1 = issue 1)
+        if [[ -n "$issue_ids_str" ]]; then
+            issue_ids_str="$issue_ids_str
+$id"
+        else
+            issue_ids_str="$id"
+        fi
 
         # Handle null short_id
         local display_id
@@ -399,7 +437,7 @@ wizard_step_issues() {
     done < <(echo "$issues_json" | jq -r '.[] | [.id, (.short_id // "null"), .provider, (.priority | tostring), (.severity // "null"), (.title // "No title")] | @tsv')
 
     # Store issue IDs for selection
-    wizard_set "issue_ids" "$(declare -p issue_ids)"
+    wizard_set "issue_ids_str" "$issue_ids_str"
     wizard_set "issue_count" "$idx"
 
     echo ""
@@ -419,22 +457,22 @@ wizard_step_issues() {
         # Parse selection
         local selected_ids=""
         if [[ "$selection" == "all" ]]; then
-            for i in $(seq 1 $idx); do
-                if [[ -n "$selected_ids" ]]; then
-                    selected_ids="$selected_ids,${issue_ids[$i]}"
-                else
-                    selected_ids="${issue_ids[$i]}"
-                fi
-            done
+            # Select all issues
+            selected_ids=$(echo "$issue_ids_str" | tr '\n' ',' | sed 's/,$//')
         else
-            IFS=',' read -ra nums <<< "$selection"
-            for num in "${nums[@]}"; do
+            # Parse comma-separated numbers
+            local nums=$(echo "$selection" | tr ',' ' ')
+            for num in $nums; do
                 num=$(echo "$num" | tr -d ' ')
-                if [[ "$num" =~ ^[0-9]+$ ]] && [[ -n "${issue_ids[$num]:-}" ]]; then
-                    if [[ -n "$selected_ids" ]]; then
-                        selected_ids="$selected_ids,${issue_ids[$num]}"
-                    else
-                        selected_ids="${issue_ids[$num]}"
+                if [[ "$num" =~ ^[0-9]+$ ]] && [[ "$num" -ge 1 ]] && [[ "$num" -le "$idx" ]]; then
+                    # Get issue ID by line number
+                    local issue_id=$(echo "$issue_ids_str" | sed -n "${num}p")
+                    if [[ -n "$issue_id" ]]; then
+                        if [[ -n "$selected_ids" ]]; then
+                            selected_ids="$selected_ids,$issue_id"
+                        else
+                            selected_ids="$issue_id"
+                        fi
                     fi
                 fi
             done
@@ -658,6 +696,25 @@ wizard_step_confirm() {
     echo -e "  Verbose:    $([[ "$stream_mode" == "true" ]] && echo "Yes" || echo "No")"
 
     echo -e "${BLUE}$(draw_line 62 "$BOX2_H")${NC}"
+
+    # Display cost/time estimate if estimator is available
+    if declare -f estimator_display_estimate >/dev/null 2>&1; then
+        local issue_count=$(wizard_get "selected_count")
+        local model=$(wizard_get "model")
+        local mode=$(wizard_get "mode")
+        local iterations
+
+        if [[ "$mode" == "plan+build" ]]; then
+            # Combined iterations for plan+build
+            local plan_iters=$(wizard_get "plan_iterations")
+            local build_iters=$(wizard_get "build_iterations")
+            iterations=$((plan_iters + build_iters))
+        else
+            iterations=$(wizard_get "max_iterations")
+        fi
+
+        estimator_display_estimate "$issue_count" "$mode" "$model" "$iterations"
+    fi
     echo ""
 
     while true; do

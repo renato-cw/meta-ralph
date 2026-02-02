@@ -7,28 +7,29 @@ INTERACTIVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$INTERACTIVE_DIR/ui.sh"
 
 # ============================================================================
-# SUMMARY DATA COLLECTION
+# SUMMARY DATA COLLECTION (bash 3.x compatible)
 # ============================================================================
 
-# Summary state
-declare -A SUMMARY_DATA
-declare -a SUMMARY_ISSUES
+# Summary state using prefixed variables (bash 3.x compatible)
+SUMMARY_ISSUES_LIST=""  # Pipe-delimited list of issues
+SUMMARY_ISSUES_COUNT=0
 
 # Initialize summary tracking
 # Usage: summary_init
 summary_init() {
-    SUMMARY_DATA=()
-    SUMMARY_ISSUES=()
-    SUMMARY_DATA["start_time"]=$(date +%s)
-    SUMMARY_DATA["total_issues"]=0
-    SUMMARY_DATA["fixed_issues"]=0
-    SUMMARY_DATA["failed_issues"]=0
-    SUMMARY_DATA["total_cost"]=0
-    SUMMARY_DATA["total_iterations"]=0
-    SUMMARY_DATA["files_modified"]=0
-    SUMMARY_DATA["lines_added"]=0
-    SUMMARY_DATA["lines_removed"]=0
-    SUMMARY_DATA["prs_created"]=0
+    SUMMARY_ISSUES_LIST=""
+    SUMMARY_ISSUES_COUNT=0
+    SUMMARY_start_time=$(date +%s)
+    SUMMARY_total_issues=0
+    SUMMARY_fixed_issues=0
+    SUMMARY_failed_issues=0
+    SUMMARY_total_cost=0
+    SUMMARY_total_iterations=0
+    SUMMARY_files_modified=0
+    SUMMARY_lines_added=0
+    SUMMARY_lines_removed=0
+    SUMMARY_prs_created=0
+    SUMMARY_duration=0
 }
 
 # Add issue result to summary
@@ -42,39 +43,44 @@ summary_add_issue() {
     local cost="${6:-0}"
     local iterations="${7:-0}"
 
-    local idx=${#SUMMARY_ISSUES[@]}
-    SUMMARY_ISSUES[$idx]="$issue_id|$title|$provider|$status|$pr_url|$cost|$iterations"
+    # Add to issues list (newline separated)
+    if [[ -n "$SUMMARY_ISSUES_LIST" ]]; then
+        SUMMARY_ISSUES_LIST="$SUMMARY_ISSUES_LIST
+$issue_id|$title|$provider|$status|$pr_url|$cost|$iterations"
+    else
+        SUMMARY_ISSUES_LIST="$issue_id|$title|$provider|$status|$pr_url|$cost|$iterations"
+    fi
+    SUMMARY_ISSUES_COUNT=$((SUMMARY_ISSUES_COUNT + 1))
 
-    SUMMARY_DATA["total_issues"]=$((${SUMMARY_DATA["total_issues"]} + 1))
+    SUMMARY_total_issues=$((SUMMARY_total_issues + 1))
 
     if [[ "$status" == "fixed" ]]; then
-        SUMMARY_DATA["fixed_issues"]=$((${SUMMARY_DATA["fixed_issues"]} + 1))
-        [[ -n "$pr_url" ]] && SUMMARY_DATA["prs_created"]=$((${SUMMARY_DATA["prs_created"]} + 1))
+        SUMMARY_fixed_issues=$((SUMMARY_fixed_issues + 1))
+        [[ -n "$pr_url" ]] && SUMMARY_prs_created=$((SUMMARY_prs_created + 1))
     else
-        SUMMARY_DATA["failed_issues"]=$((${SUMMARY_DATA["failed_issues"]} + 1))
+        SUMMARY_failed_issues=$((SUMMARY_failed_issues + 1))
     fi
 
     # Accumulate cost (using bc for float arithmetic)
     if command -v bc &>/dev/null; then
-        SUMMARY_DATA["total_cost"]=$(echo "${SUMMARY_DATA["total_cost"]} + $cost" | bc -l 2>/dev/null || echo "${SUMMARY_DATA["total_cost"]}")
+        SUMMARY_total_cost=$(echo "$SUMMARY_total_cost + $cost" | bc -l 2>/dev/null || echo "$SUMMARY_total_cost")
     fi
 
-    SUMMARY_DATA["total_iterations"]=$((${SUMMARY_DATA["total_iterations"]} + iterations))
+    SUMMARY_total_iterations=$((SUMMARY_total_iterations + iterations))
 }
 
 # Set file statistics
 # Usage: summary_set_file_stats modified added removed
 summary_set_file_stats() {
-    SUMMARY_DATA["files_modified"]="${1:-0}"
-    SUMMARY_DATA["lines_added"]="${2:-0}"
-    SUMMARY_DATA["lines_removed"]="${3:-0}"
+    SUMMARY_files_modified="${1:-0}"
+    SUMMARY_lines_added="${2:-0}"
+    SUMMARY_lines_removed="${3:-0}"
 }
 
 # Finalize summary timing
 summary_finalize() {
     local end_time=$(date +%s)
-    local duration=$((end_time - ${SUMMARY_DATA["start_time"]}))
-    SUMMARY_DATA["duration"]=$duration
+    SUMMARY_duration=$((end_time - SUMMARY_start_time))
 }
 
 # ============================================================================
@@ -105,16 +111,16 @@ format_cost() {
 summary_display() {
     summary_finalize
 
-    local total=${SUMMARY_DATA["total_issues"]}
-    local fixed=${SUMMARY_DATA["fixed_issues"]}
-    local failed=${SUMMARY_DATA["failed_issues"]}
-    local duration=${SUMMARY_DATA["duration"]}
-    local cost=${SUMMARY_DATA["total_cost"]}
-    local prs=${SUMMARY_DATA["prs_created"]}
-    local files=${SUMMARY_DATA["files_modified"]}
-    local added=${SUMMARY_DATA["lines_added"]}
-    local removed=${SUMMARY_DATA["lines_removed"]}
-    local iterations=${SUMMARY_DATA["total_iterations"]}
+    local total=$SUMMARY_total_issues
+    local fixed=$SUMMARY_fixed_issues
+    local failed=$SUMMARY_failed_issues
+    local duration=$SUMMARY_duration
+    local cost=$SUMMARY_total_cost
+    local prs=$SUMMARY_prs_created
+    local files=$SUMMARY_files_modified
+    local added=$SUMMARY_lines_added
+    local removed=$SUMMARY_lines_removed
+    local iterations=$SUMMARY_total_iterations
 
     echo ""
     echo -e "${BLUE}${BOX2_TL}$(printf '%*s' 63 '' | tr ' ' "$BOX2_H")${BOX2_TR}${NC}"
@@ -125,29 +131,29 @@ summary_display() {
     # Issues processed
     echo -e "${WHITE}Issues Processed:${NC} $total"
 
-    # Issue details
-    for issue_data in "${SUMMARY_ISSUES[@]}"; do
-        IFS='|' read -r id title provider status pr_url issue_cost issue_iters <<< "$issue_data"
-
-        local status_icon status_color status_text
-        if [[ "$status" == "fixed" ]]; then
-            status_icon="✓"
-            status_color="$GREEN"
-            if [[ -n "$pr_url" ]]; then
-                status_text="FIXED - $pr_url"
+    # Issue details (iterate over newline-separated list)
+    if [[ -n "$SUMMARY_ISSUES_LIST" ]]; then
+        echo "$SUMMARY_ISSUES_LIST" | while IFS='|' read -r id title provider status pr_url issue_cost issue_iters; do
+            local status_icon status_color status_text
+            if [[ "$status" == "fixed" ]]; then
+                status_icon="✓"
+                status_color="$GREEN"
+                if [[ -n "$pr_url" ]]; then
+                    status_text="FIXED - $pr_url"
+                else
+                    status_text="FIXED"
+                fi
             else
-                status_text="FIXED"
+                status_icon="✗"
+                status_color="$RED"
+                status_text="FAILED - see logs"
             fi
-        else
-            status_icon="✗"
-            status_color="$RED"
-            status_text="FAILED - see logs"
-        fi
 
-        local provider_color=$(get_provider_color "$provider")
-        printf "  ${status_color}%s${NC} ${provider_color}%-10s${NC} %-25s ${GRAY}[%s]${NC}\n" \
-            "$status_icon" "[$provider]" "${title:0:25}" "$status_text"
-    done
+            local provider_color=$(get_provider_color "$provider")
+            printf "  ${status_color}%s${NC} ${provider_color}%-10s${NC} %-25s ${GRAY}[%s]${NC}\n" \
+                "$status_icon" "[$provider]" "${title:0:25}" "$status_text"
+        done
+    fi
 
     echo ""
     draw_line 63 "─" "$GRAY"
@@ -207,9 +213,9 @@ summary_display() {
 # Usage: summary_status_line "Processing issue 2/5..."
 summary_status_line() {
     local message="$1"
-    local fixed=${SUMMARY_DATA["fixed_issues"]:-0}
-    local failed=${SUMMARY_DATA["failed_issues"]:-0}
-    local cost=${SUMMARY_DATA["total_cost"]:-0}
+    local fixed=${SUMMARY_fixed_issues:-0}
+    local failed=${SUMMARY_failed_issues:-0}
+    local cost=${SUMMARY_total_cost:-0}
 
     printf "\r${CYAN}%s${NC} | ${GREEN}✓%d${NC} ${RED}✗%d${NC} | ${YELLOW}\$%.2f${NC}  " \
         "$message" "$fixed" "$failed" "$cost"
@@ -226,38 +232,28 @@ summary_to_json() {
 
     local issues_json="["
     local first=true
-    for issue_data in "${SUMMARY_ISSUES[@]}"; do
-        IFS='|' read -r id title provider status pr_url cost iterations <<< "$issue_data"
 
-        [[ "$first" == "true" ]] && first=false || issues_json+=","
-        issues_json+=$(cat <<EOF
-{
-    "id": "$id",
-    "title": "$title",
-    "provider": "$provider",
-    "status": "$status",
-    "pr_url": "$pr_url",
-    "cost": $cost,
-    "iterations": $iterations
-}
-EOF
-)
-    done
+    if [[ -n "$SUMMARY_ISSUES_LIST" ]]; then
+        echo "$SUMMARY_ISSUES_LIST" | while IFS='|' read -r id title provider status pr_url cost iterations; do
+            [[ "$first" == "true" ]] && first=false || issues_json+=","
+            issues_json+="{\"id\":\"$id\",\"title\":\"$title\",\"provider\":\"$provider\",\"status\":\"$status\",\"pr_url\":\"$pr_url\",\"cost\":$cost,\"iterations\":$iterations}"
+        done
+    fi
     issues_json+="]"
 
     cat <<EOF
 {
     "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "duration_seconds": ${SUMMARY_DATA["duration"]},
-    "total_issues": ${SUMMARY_DATA["total_issues"]},
-    "fixed_issues": ${SUMMARY_DATA["fixed_issues"]},
-    "failed_issues": ${SUMMARY_DATA["failed_issues"]},
-    "total_cost_usd": ${SUMMARY_DATA["total_cost"]},
-    "total_iterations": ${SUMMARY_DATA["total_iterations"]},
-    "files_modified": ${SUMMARY_DATA["files_modified"]},
-    "lines_added": ${SUMMARY_DATA["lines_added"]},
-    "lines_removed": ${SUMMARY_DATA["lines_removed"]},
-    "prs_created": ${SUMMARY_DATA["prs_created"]},
+    "duration_seconds": $SUMMARY_duration,
+    "total_issues": $SUMMARY_total_issues,
+    "fixed_issues": $SUMMARY_fixed_issues,
+    "failed_issues": $SUMMARY_failed_issues,
+    "total_cost_usd": $SUMMARY_total_cost,
+    "total_iterations": $SUMMARY_total_iterations,
+    "files_modified": $SUMMARY_files_modified,
+    "lines_added": $SUMMARY_lines_added,
+    "lines_removed": $SUMMARY_lines_removed,
+    "prs_created": $SUMMARY_prs_created,
     "issues": $issues_json
 }
 EOF
@@ -268,14 +264,13 @@ EOF
 # ============================================================================
 
 # Display failure analysis for an issue
-# Usage: summary_failure_analysis "issue_id" "last_error" "attempts" "progress_pct" suggestions...
+# Usage: summary_failure_analysis "issue_id" "last_error" "attempts" "progress_pct" "suggestion1" "suggestion2" ...
 summary_failure_analysis() {
     local issue_id="$1"
     local last_error="$2"
     local attempts="$3"
     local progress="$4"
     shift 4
-    local suggestions=("$@")
 
     echo ""
     echo -e "${RED}${BOX2_TL}$(printf '%*s' 63 '' | tr ' ' "$BOX2_H")${BOX2_TR}${NC}"
@@ -296,10 +291,10 @@ summary_failure_analysis() {
         done <<< "$wrapped"
     fi
 
-    if [[ ${#suggestions[@]} -gt 0 ]]; then
+    if [[ $# -gt 0 ]]; then
         echo -e "${RED}${BOX2_V}${NC}                                                               ${RED}${BOX2_V}${NC}"
         printf "${RED}${BOX2_V}${NC}  ${WHITE}Suggestions:${NC}                                                 ${RED}${BOX2_V}${NC}\n"
-        for suggestion in "${suggestions[@]}"; do
+        for suggestion in "$@"; do
             printf "${RED}${BOX2_V}${NC}    ${CYAN}•${NC} %-54s ${RED}${BOX2_V}${NC}\n" "$suggestion"
         done
     fi
