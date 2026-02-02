@@ -11,6 +11,54 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # This enables processing issues that target external repositories
 source "$SCRIPT_DIR/lib/workspace-manager.sh" 2>/dev/null || true
 
+# Source interactive UI utilities for spinner (optional)
+# This enables loading animation while waiting for Claude response
+source "$SCRIPT_DIR/lib/interactive/ui.sh" 2>/dev/null || true
+
+# ============================================================================
+# LOADING SPINNER
+# ============================================================================
+
+# Spinner state
+_SPINNER_PID=""
+_SPINNER_ACTIVE=false
+
+# Spinner characters (Braille pattern animation)
+_SPINNER_CHARS=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+
+# Start the thinking spinner
+# Usage: start_thinking_spinner
+start_thinking_spinner() {
+    # Don't start if already running or not in stream mode
+    [[ "$_SPINNER_ACTIVE" == "true" ]] && return
+    [[ "${RALPH_STREAM_MODE:-false}" != "true" ]] && return
+
+    _SPINNER_ACTIVE=true
+
+    (
+        local i=0
+        while true; do
+            printf "\r  ${YELLOW}${_SPINNER_CHARS[$i]}${NC} ${GRAY}Thinking...${NC}  "
+            i=$(( (i + 1) % ${#_SPINNER_CHARS[@]} ))
+            sleep 0.1
+        done
+    ) &
+    _SPINNER_PID=$!
+    disown $_SPINNER_PID 2>/dev/null
+}
+
+# Stop the thinking spinner and clear the line
+# Usage: stop_thinking_spinner
+stop_thinking_spinner() {
+    if [[ -n "$_SPINNER_PID" ]] && [[ "$_SPINNER_ACTIVE" == "true" ]]; then
+        kill $_SPINNER_PID 2>/dev/null
+        wait $_SPINNER_PID 2>/dev/null
+        _SPINNER_PID=""
+        _SPINNER_ACTIVE=false
+        printf "\r%*s\r" 40 ""  # Clear the spinner line
+    fi
+}
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -329,8 +377,8 @@ ralph_fix_loop() {
     init_cost_tracking
 
     # Setup signal handlers for clean exit
-    trap 'save_session_costs; cleanup_cost_tracking; echo -e "\n${YELLOW}⚠️  Interrupted by user${NC}"; show_cost_summary; exit 130' INT TERM
-    trap 'cleanup_cost_tracking' EXIT
+    trap 'stop_thinking_spinner; save_session_costs; cleanup_cost_tracking; echo -e "\n${YELLOW}⚠️  Interrupted by user${NC}"; show_cost_summary; exit 130' INT TERM
+    trap 'stop_thinking_spinner; cleanup_cost_tracking' EXIT
 
     # Get current branch if not provided
     if [ -z "$branch_name" ]; then
@@ -584,11 +632,20 @@ Before finishing, verify:
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
             # Streaming mode: use process substitution to avoid subshell issues
             local temp_output=$(mktemp)
+            local first_event=true
 
             emit_activity "$issue_id" "message" "" "Starting Claude (streaming mode)" "running"
 
+            # Start the thinking spinner while waiting for first response
+            start_thinking_spinner
+
             # Use process substitution - while runs in main shell, Claude output streams through
             while IFS= read -r line; do
+                # Stop spinner on first event
+                if [[ "$first_event" == "true" ]]; then
+                    stop_thinking_spinner
+                    first_event=false
+                fi
                 # Parse and emit the event to UI
                 parse_claude_event "$issue_id" "$line"
                 # Also save to temp file for result processing
@@ -599,6 +656,9 @@ Before finishing, verify:
 $context_files
 " 2>&1)
             claude_exit=$?
+
+            # Ensure spinner is stopped
+            stop_thinking_spinner
 
             result=$(cat "$temp_output" 2>/dev/null || echo "")
             rm -f "$temp_output"
