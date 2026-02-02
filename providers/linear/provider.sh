@@ -55,18 +55,11 @@ provider_fetch() {
         return 1
     fi
 
-    # Build state filter array for GraphQL
-    local states_filter
-    states_filter=$(echo "$LINEAR_STATES" | tr ',' '\n' | jq -R . | jq -s . | tr -d '\n')
-
-    # GraphQL query to fetch issues
+    # GraphQL query to fetch issues (no state filter - fetch all)
     local query='
-    query($teamId: String!, $states: [String!]) {
+    query($teamId: String!) {
       team(id: $teamId) {
         issues(
-          filter: {
-            state: { name: { in: $states } }
-          }
           first: 100
           orderBy: updatedAt
         ) {
@@ -110,8 +103,7 @@ provider_fetch() {
     payload=$(jq -n \
         --arg query "$query" \
         --arg teamId "$LINEAR_TEAM_ID" \
-        --argjson states "$states_filter" \
-        '{query: $query, variables: {teamId: $teamId, states: $states}}')
+        '{query: $query, variables: {teamId: $teamId}}')
 
     # Make API request
     local response
