@@ -165,13 +165,13 @@ ensure_repo() {
         local default_branch
         default_branch=$(get_default_branch "$repo_path")
 
-        # Checkout default branch and pull
-        if ! git -C "$repo_path" checkout "$default_branch" 2>/dev/null; then
+        # Checkout default branch and pull (redirect stdout to avoid polluting return value)
+        if ! git -C "$repo_path" checkout "$default_branch" >/dev/null 2>&1; then
             log_warn "Could not checkout $default_branch"
         fi
 
-        # Reset any local changes and pull latest
-        git -C "$repo_path" reset --hard "origin/$default_branch" 2>/dev/null || true
+        # Reset any local changes and pull latest (redirect all output)
+        git -C "$repo_path" reset --hard "origin/$default_branch" >/dev/null 2>&1 || true
 
         log_success "Repository updated: $full_name"
     else

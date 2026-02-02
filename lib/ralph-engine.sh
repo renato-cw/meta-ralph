@@ -291,6 +291,10 @@ ralph_fix_loop() {
     local model="${6:-sonnet}"  # sonnet or opus
     local branch_name="${7:-}"  # branch for pushing
 
+    # Derive work_dir from prd_file location
+    local work_dir
+    work_dir="$(dirname "$prd_file")"
+
     local iteration_start_time
 
     # Initialize cost tracking
@@ -338,33 +342,153 @@ ralph_fix_loop() {
     local mode_instructions=""
 
     if [[ "$mode" == "plan" ]]; then
-        mode_instructions="You are analyzing the issue to create an implementation plan. DO NOT make code changes.
+        mode_instructions="You are analyzing an issue to create and refine an implementation plan. DO NOT make code changes.
 
-Instructions:
-1. Read the PRD carefully
-2. Analyze the codebase to understand the issue
-3. Identify all files that need to be modified
-4. Document the root cause
-5. Create an IMPLEMENTATION_PLAN.md with:
-   - Files to modify (with checkboxes)
-   - Step-by-step implementation steps
-   - Risks and mitigations
-   - Test strategy
+## Your Task
 
-DO NOT modify any code files - only create the plan."
+If IMPLEMENTATION_PLAN.md exists, READ IT FIRST. Your job is to REFINE and IMPROVE the existing plan, not start from scratch.
+
+## Iteration Strategy
+
+Each iteration should go DEEPER:
+- Iteration 1: High-level analysis, identify obvious files and approach
+- Iteration 2: Search for edge cases, validate assumptions with code search
+- Iteration 3+: Drill into complex areas, refine estimates, find hidden dependencies
+
+## Instructions
+
+1. Read the PRD to understand the issue
+2. If IMPLEMENTATION_PLAN.md exists:
+   - Review what was already discovered
+   - Identify GAPS or UNCERTAINTIES in the current plan
+   - Search code to validate/invalidate assumptions
+   - Add newly discovered files or considerations
+3. If IMPLEMENTATION_PLAN.md doesn't exist, create it
+4. Use parallel subagents (up to 100) to search the codebase thoroughly
+5. Look for:
+   - Files that need modification (use Grep/Glob extensively)
+   - Related tests that need updating
+   - Similar patterns in the codebase to follow
+   - Potential side effects or breaking changes
+   - TODOs, FIXMEs, or existing workarounds related to this issue
+
+## IMPLEMENTATION_PLAN.md Structure
+
+\`\`\`markdown
+# Implementation Plan: [Issue Title]
+
+## Summary
+[1-2 sentence summary of the issue and proposed solution]
+
+## Analysis Status
+- [x] Initial codebase scan
+- [ ] Edge cases identified
+- [ ] Test coverage analyzed
+- [ ] Dependencies mapped
+
+## Files to Modify
+- [ ] \`path/to/file.ts\` - [what needs to change]
+- [ ] \`path/to/test.ts\` - [tests to add/update]
+
+## Implementation Steps
+1. [ ] Step 1 description
+2. [ ] Step 2 description
+
+## Open Questions
+- [ ] Question that needs investigation
+- [x] Resolved: [answer found]
+
+## Risks & Mitigations
+| Risk | Likelihood | Mitigation |
+|------|------------|------------|
+| ... | ... | ... |
+
+## Test Strategy
+- Unit tests: ...
+- Integration tests: ...
+
+## Discoveries This Iteration
+[What you learned/found in THIS iteration - append, don't overwrite]
+\`\`\`
+
+## CRITICAL RULES
+
+1. DO NOT modify any code files - only IMPLEMENTATION_PLAN.md
+2. DO NOT assume something exists - SEARCH and confirm
+3. DO NOT repeat previous discoveries - BUILD ON THEM
+4. Each iteration MUST add new information or mark something as validated"
     else
-        mode_instructions="You are a senior engineer fixing an issue.
+        mode_instructions="You are a senior engineer implementing a fix. Your goal is COMPLETE, WORKING code - no stubs or placeholders.
 
-Instructions:
-1. Read the PRD carefully
-2. Read the progress file to understand what has been tried
-3. If IMPLEMENTATION_PLAN.md exists, follow it and check off completed items
-4. Locate and fix the issue
-5. Run the appropriate build/lint command to check for issues
-6. Run the appropriate test command
-7. Commit your changes with an appropriate message
-8. Update the progress file with what you did
-9. If you encounter blockers, document them in progress.txt and try a different approach"
+## Pre-Implementation (CRITICAL)
+
+Before writing ANY code:
+1. Use up to 100 parallel subagents to search the codebase
+2. NEVER assume something doesn't exist - SEARCH FIRST
+3. Look for similar patterns, existing utilities, related tests
+4. Check if someone already implemented what you need
+
+## Implementation Strategy
+
+1. Read the PRD to understand the issue
+2. Read progress.txt to see what was already tried
+3. If IMPLEMENTATION_PLAN.md exists:
+   - Find the next unchecked item
+   - Implement it COMPLETELY (no TODOs, no placeholders)
+   - Mark as complete: \`- [ ]\` → \`- [x]\`
+   - Document discoveries in the plan
+4. If no plan exists, analyze and fix directly
+
+## Quality Standards
+
+### Code Quality
+- Implement functionality COMPLETELY - stubs waste future iterations
+- Follow existing patterns in the codebase
+- Add logging/observability for critical paths
+- Single source of truth - no adapters or migrations unless necessary
+
+### Testing (MANDATORY)
+- Run unit tests for modified code
+- Add/update integration tests
+- E2E tests for user-facing changes
+- ALL tests must pass before committing
+
+### After Each Change
+1. Run build/lint - fix all errors
+2. Run tests - fix all failures
+3. git add -A && git commit with meaningful message
+4. git push (NEVER to main/master, NEVER force push)
+
+## Commit Guidelines
+
+- Use conventional commits: fix(scope): description
+- Reference the issue ID in commit body
+- One logical change per commit
+- Commit message should explain WHY, not just WHAT
+
+## Self-Review Checklist
+
+Before finishing, verify:
+- [ ] No duplicate code introduced (search for similar functions)
+- [ ] Following naming patterns of existing code
+- [ ] No hardcoded values that should be configurable
+- [ ] Error handling is complete
+- [ ] Tests cover the changes
+
+## When You Discover Issues
+
+- Document in IMPLEMENTATION_PLAN.md immediately
+- Fix unrelated bugs you notice (don't ignore them)
+- Update progress.txt with learnings
+- If blocked, try alternative approach before giving up
+
+## IMPORTANT RULES
+
+1. NEVER commit to main/master
+2. NEVER push --force
+3. NEVER leave placeholders/TODOs in new code
+4. ALWAYS search before implementing
+5. ALWAYS run tests before committing"
     fi
 
     # Determine Claude output format
@@ -409,7 +533,26 @@ Instructions:
         local result=""
         local claude_exit=0
 
-        # Execute Claude with PRD
+        # Build context files list
+        local context_files="@$prd_file
+@$progress_file"
+
+        # For plan mode, include IMPLEMENTATION_PLAN.md if it exists
+        local impl_plan_file="$work_dir/IMPLEMENTATION_PLAN.md"
+        if [[ "$mode" == "plan" && -f "$impl_plan_file" ]]; then
+            context_files="$context_files
+@$impl_plan_file"
+            echo -e "  ${GRAY}📋 Including existing IMPLEMENTATION_PLAN.md${NC}"
+        fi
+
+        # For build mode, also include IMPLEMENTATION_PLAN.md if it exists
+        if [[ "$mode" == "build" && -f "$impl_plan_file" ]]; then
+            context_files="$context_files
+@$impl_plan_file"
+            echo -e "  ${GRAY}📋 Following IMPLEMENTATION_PLAN.md${NC}"
+        fi
+
+        # Execute Claude with context
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
             # Streaming mode: use process substitution to avoid subshell issues
             local temp_output=$(mktemp)
@@ -425,8 +568,7 @@ Instructions:
             done < <(claude $claude_opts \
                 "$mode_instructions
 
-@$prd_file
-@$progress_file
+$context_files
 " 2>&1)
             claude_exit=$?
 
@@ -437,8 +579,7 @@ Instructions:
             result=$(claude $claude_opts \
                 "$mode_instructions
 
-@$prd_file
-@$progress_file
+$context_files
 " 2>&1) || claude_exit=$?
         fi
 
