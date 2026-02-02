@@ -7,14 +7,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 
 # ============================================================================
-# LOAD .env FILE
+# LOAD .env FILE (without overwriting existing environment variables)
 # ============================================================================
 
 if [[ -f "$ENV_FILE" ]]; then
-    # Export all variables from .env (ignoring comments and empty lines)
-    set -a
-    source "$ENV_FILE"
-    set +a
+    # Load .env but DON'T overwrite variables already set in environment
+    # This allows profiles to override .env values
+    while IFS='=' read -r key value || [[ -n "$key" ]]; do
+        # Skip comments and empty lines
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        # Remove leading/trailing whitespace from key
+        key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # Skip if empty after trimming
+        [[ -z "$key" ]] && continue
+        # Only set if not already defined in environment
+        if [[ -z "${!key+x}" ]]; then
+            # Remove quotes from value if present
+            value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^["'"'"']//;s/["'"'"']$//')
+            export "$key=$value"
+        fi
+    done < "$ENV_FILE"
 else
     echo "WARNING: .env file not found at $ENV_FILE" >&2
     echo "Copy .env.example to .env and fill in your credentials" >&2
@@ -188,6 +200,10 @@ validate_config() {
 
 config_loaded() {
     echo "Meta-Ralph config loaded from: $ENV_FILE"
+    if [[ -n "${RALPH_CURRENT_PROFILE:-}" ]]; then
+        echo "  Profile: $RALPH_CURRENT_PROFILE"
+    fi
+    echo "  GitHub: ${GITHUB_OWNER:-}/${GITHUB_REPO:-(not configured)}"
     echo "  Zeropath: ${ZEROPATH_ORGANIZATION_ID:-(not configured)}"
     echo "  Sentry: ${SENTRY_ORGANIZATION:-}/${SENTRY_PROJECT:-(not configured)}"
     echo "  Codecov: ${CODECOV_OWNER:-}/${CODECOV_REPO:-(not configured)}"
@@ -196,7 +212,7 @@ config_loaded() {
     echo "  Base branch: $RALPH_BASE_BRANCH"
     echo "  Default mode: $DEFAULT_PROCESSING_MODE"
     echo "  Default model: $DEFAULT_MODEL"
-    echo "  Workspace: $META_RALPH_WORKSPACE"
+    echo "  Target repo: ${TARGET_REPO:-(current directory)}"
 }
 
 # Show config if run directly
