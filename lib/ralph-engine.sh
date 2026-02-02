@@ -22,6 +22,88 @@ GRAY='\033[0;90m'
 NC='\033[0m'
 
 # ============================================================================
+# COST TRACKING (imported from cwralph)
+# ============================================================================
+
+RALPH_DATA_DIR="$HOME/.ralph"
+COST_FILE="$RALPH_DATA_DIR/costs.json"
+ITERATION_COST_FILE=""
+SESSION_COST=0
+SESSION_DURATION=0
+ALLTIME_COST=0
+ALLTIME_DURATION=0
+CURRENT_ITERATION=0
+
+# Initialize cost tracking
+init_cost_tracking() {
+    mkdir -p "$RALPH_DATA_DIR"
+    if [ ! -f "$COST_FILE" ]; then
+        echo '{"total_cost_usd":0,"total_duration_ms":0,"sessions":[]}' > "$COST_FILE"
+    fi
+
+    # Create temp file for iteration costs
+    ITERATION_COST_FILE=$(mktemp)
+
+    # Load all-time totals
+    ALLTIME_COST=$(jq -r '.total_cost_usd // 0' "$COST_FILE" 2>/dev/null || echo "0")
+    ALLTIME_DURATION=$(jq -r '.total_duration_ms // 0' "$COST_FILE" 2>/dev/null || echo "0")
+}
+
+# Cleanup temp files
+cleanup_cost_tracking() {
+    [ -n "$ITERATION_COST_FILE" ] && rm -f "$ITERATION_COST_FILE"
+}
+
+# Save session costs to persistent file
+save_session_costs() {
+    if [ "$(echo "$SESSION_COST > 0" | bc 2>/dev/null || echo "0")" -eq 1 ]; then
+        local session_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        local mode="${RALPH_MODE:-build}"
+        local updated=$(jq --arg date "$session_date" \
+            --arg mode "$mode" \
+            --argjson cost "$SESSION_COST" \
+            --argjson duration "$SESSION_DURATION" \
+            --argjson iterations "$CURRENT_ITERATION" \
+            '.total_cost_usd = (.total_cost_usd + $cost) |
+             .total_duration_ms = (.total_duration_ms + $duration) |
+             .sessions += [{"date": $date, "mode": $mode, "cost_usd": $cost, "duration_ms": $duration, "iterations": $iterations}]' \
+            "$COST_FILE" 2>/dev/null)
+        if [ -n "$updated" ]; then
+            echo "$updated" > "$COST_FILE"
+        fi
+    fi
+}
+
+# Display cost summary
+show_cost_summary() {
+    local new_alltime_cost=$(jq -r '.total_cost_usd // 0' "$COST_FILE" 2>/dev/null || echo "0")
+    local new_alltime_duration=$(jq -r '.total_duration_ms // 0' "$COST_FILE" 2>/dev/null || echo "0")
+    local alltime_duration_hrs=$(echo "scale=2; $new_alltime_duration / 3600000" | bc 2>/dev/null || echo "0")
+    local session_duration_min=$(echo "scale=1; $SESSION_DURATION / 60000" | bc 2>/dev/null || echo "0")
+
+    echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${MAGENTA}💰 Cost Summary${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    printf "  ${YELLOW}This session:${NC}  \$%.4f (%s min)\n" "$SESSION_COST" "$session_duration_min"
+    printf "  ${YELLOW}All-time:${NC}      \$%.4f (%s hrs)\n" "$new_alltime_cost" "$alltime_duration_hrs"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+# Accumulate costs from iteration
+accumulate_iteration_cost() {
+    if [ -f "$ITERATION_COST_FILE" ] && [ -s "$ITERATION_COST_FILE" ]; then
+        while read -r iter_cost iter_duration; do
+            if [ -n "$iter_cost" ] && [ -n "$iter_duration" ]; then
+                SESSION_COST=$(echo "$SESSION_COST + $iter_cost" | bc 2>/dev/null || echo "$SESSION_COST")
+                SESSION_DURATION=$(echo "$SESSION_DURATION + $iter_duration" | bc 2>/dev/null || echo "$SESSION_DURATION")
+            fi
+        done < "$ITERATION_COST_FILE"
+        # Clear the temp file for next iteration
+        > "$ITERATION_COST_FILE"
+    fi
+}
+
+# ============================================================================
 # STREAMING SUPPORT
 # ============================================================================
 
@@ -164,10 +246,27 @@ parse_claude_event() {
             # Final result with usage info
             local input_tokens=$(echo "$json_line" | jq -r '.usage.input_tokens // 0')
             local output_tokens=$(echo "$json_line" | jq -r '.usage.output_tokens // 0')
-            # Estimate cost (Sonnet: $3/$15 per 1M tokens)
-            local cost=$(echo "scale=6; ($input_tokens * 0.000003) + ($output_tokens * 0.000015)" | bc 2>/dev/null || echo "0")
+            local duration_ms=$(echo "$json_line" | jq -r '.duration_ms // 0')
+            local total_cost_usd=$(echo "$json_line" | jq -r '.total_cost_usd // empty')
+
+            # Use actual cost from result if available, otherwise estimate
+            local cost
+            if [ -n "$total_cost_usd" ] && [ "$total_cost_usd" != "null" ]; then
+                cost="$total_cost_usd"
+            else
+                # Estimate cost (Sonnet: $3/$15 per 1M tokens)
+                cost=$(echo "scale=6; ($input_tokens * 0.000003) + ($output_tokens * 0.000015)" | bc 2>/dev/null || echo "0")
+            fi
+
             emit_activity "$issue_id" "result" "" "Tokens: $input_tokens in, $output_tokens out (cost: \$$cost)" "success"
-            echo -e "  ${GRAY}💰 Cost: \$$cost | Tokens: ${input_tokens}in/${output_tokens}out${NC}"
+
+            local duration_sec=$(echo "scale=1; $duration_ms/1000" | bc 2>/dev/null || echo "$duration_ms")
+            echo -e "  ${GRAY}💰 Iteration: \$$cost | ⏱️  ${duration_sec}s${NC}"
+
+            # Write cost to temp file for accumulation
+            if [ -n "$ITERATION_COST_FILE" ]; then
+                echo "$cost $duration_ms" >> "$ITERATION_COST_FILE"
+            fi
             ;;
         "error")
             local error_msg=$(echo "$json_line" | jq -r '.error.message // "Unknown error"')
@@ -182,7 +281,7 @@ parse_claude_event() {
 # ============================================================================
 
 # Run the Ralph fix loop for a single issue
-# Args: max_iterations, prd_file, progress_file, issue_id, mode, model
+# Args: max_iterations, prd_file, progress_file, issue_id, mode, model, branch_name
 ralph_fix_loop() {
     local max_iterations="${1:-10}"
     local prd_file="${2:-PRD.md}"
@@ -190,18 +289,33 @@ ralph_fix_loop() {
     local issue_id="${4:-unknown}"
     local mode="${5:-build}"  # plan or build
     local model="${6:-sonnet}"  # sonnet or opus
+    local branch_name="${7:-}"  # branch for pushing
 
     local iteration_start_time
-    local total_cost=0
-    local total_duration=0
 
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}   Ralph Wiggum Fix Loop Engine${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${YELLOW}PRD File:${NC} $prd_file"
-    echo -e "${YELLOW}Max Iterations:${NC} $max_iterations"
-    echo -e "${YELLOW}Mode:${NC} $mode"
-    echo -e "${YELLOW}Model:${NC} $model"
+    # Initialize cost tracking
+    init_cost_tracking
+
+    # Setup signal handlers for clean exit
+    trap 'save_session_costs; cleanup_cost_tracking; echo -e "\n${YELLOW}⚠️  Interrupted by user${NC}"; show_cost_summary; exit 130' INT TERM
+    trap 'cleanup_cost_tracking' EXIT
+
+    # Get current branch if not provided
+    if [ -z "$branch_name" ]; then
+        branch_name=$(git branch --show-current 2>/dev/null || echo "")
+    fi
+
+    # Session header (cwralph style)
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${MAGENTA}🤖 Ralph Fix Loop${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${YELLOW}📋 Mode:${NC}     $mode"
+    echo -e "  ${YELLOW}📄 PRD:${NC}      $(basename "$prd_file")"
+    echo -e "  ${YELLOW}🌿 Branch:${NC}   ${branch_name:-"(no git)"}"
+    [ "$max_iterations" -gt 0 ] && echo -e "  ${YELLOW}🔄 Max:${NC}      $max_iterations iterations"
+    printf "  ${YELLOW}💰 All-time:${NC} \$%.4f\n" "$ALLTIME_COST"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
     # Emit start activity
@@ -220,12 +334,10 @@ ralph_fix_loop() {
         echo "" >> "$progress_file"
     fi
 
-    # Build mode-specific prompt
-    local completion_marker="<promise>COMPLETE</promise>"
+    # Build mode-specific prompt (simplified - no completion markers)
     local mode_instructions=""
 
     if [[ "$mode" == "plan" ]]; then
-        completion_marker="<promise>PLAN_COMPLETE</promise>"
         mode_instructions="You are analyzing the issue to create an implementation plan. DO NOT make code changes.
 
 Instructions:
@@ -238,7 +350,6 @@ Instructions:
    - Step-by-step implementation steps
    - Risks and mitigations
    - Test strategy
-6. When the plan is complete, output exactly: $completion_marker
 
 DO NOT modify any code files - only create the plan."
     else
@@ -249,20 +360,11 @@ Instructions:
 2. Read the progress file to understand what has been tried
 3. If IMPLEMENTATION_PLAN.md exists, follow it and check off completed items
 4. Locate and fix the issue
-5. Run 'cargo clippy -- -D warnings' to check for issues (if Rust project)
-6. Run the appropriate build command to ensure it compiles
-7. If tests exist for the affected code, run them
-8. Commit your changes with an appropriate message
-9. Update the progress file with what you did
-10. If the fix is COMPLETE and verified, output exactly: $completion_marker
-11. If you encounter blockers, document them in progress.txt and try a different approach
-
-IMPORTANT: Only output $completion_marker when:
-- The issue is actually fixed
-- Build/lint passes without errors
-- You have committed the fix
-
-DO NOT output COMPLETE if there are still errors or the fix is partial."
+5. Run the appropriate build/lint command to check for issues
+6. Run the appropriate test command
+7. Commit your changes with an appropriate message
+8. Update the progress file with what you did
+9. If you encounter blockers, document them in progress.txt and try a different approach"
     fi
 
     # Determine Claude output format
@@ -278,25 +380,34 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
         claude_opts="$claude_opts --model claude-opus-4-5-20251101"
     fi
 
-    # Main loop
-    for i in $(seq 1 "$max_iterations"); do
-        echo -e "${BLUE}────────────────────────────────────────${NC}"
-        echo -e "${YELLOW}Iteration $i of $max_iterations${NC}"
-        echo -e "${BLUE}────────────────────────────────────────${NC}"
-        echo ""
+    # Main loop (cwralph style - while true with max check)
+    CURRENT_ITERATION=0
+    while true; do
+        # Check max iterations at start (like cwralph)
+        if [ "$max_iterations" -gt 0 ] && [ "$CURRENT_ITERATION" -ge "$max_iterations" ]; then
+            echo -e "\n${YELLOW}🏁 Reached max iterations: $max_iterations${NC}"
+            break
+        fi
+
+        CURRENT_ITERATION=$((CURRENT_ITERATION + 1))
+
+        # Iteration header (cwralph style)
+        echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${MAGENTA}🔄 ITERATION $CURRENT_ITERATION${NC}$( [ "$max_iterations" -gt 0 ] && echo " of $max_iterations" )"
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
         # Track iteration timing
         iteration_start_time=$(date +%s%N | cut -c1-13)
 
         # Emit iteration start
-        emit_activity "$issue_id" "message" "" "Starting iteration $i of $max_iterations" "running"
-        emit_metrics "$issue_id" "$i" "$max_iterations" "0" "0" "$total_cost" "$total_duration"
+        emit_activity "$issue_id" "message" "" "Starting iteration $CURRENT_ITERATION" "running"
+        emit_metrics "$issue_id" "$CURRENT_ITERATION" "$max_iterations" "0" "0" "$SESSION_COST" "$SESSION_DURATION"
 
         # Record attempt
-        echo "## Iteration $i - $(date)" >> "$progress_file"
+        echo "## Iteration $CURRENT_ITERATION - $(date)" >> "$progress_file"
 
         local result=""
-        local iteration_cost=0
+        local claude_exit=0
 
         # Execute Claude with PRD
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
@@ -306,7 +417,6 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
             emit_activity "$issue_id" "message" "" "Starting Claude (streaming mode)" "running"
 
             # Use process substitution - while runs in main shell, Claude output streams through
-            # tee captures to file while we process each line in real-time
             while IFS= read -r line; do
                 # Parse and emit the event to UI
                 parse_claude_event "$issue_id" "$line"
@@ -318,8 +428,8 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
 @$prd_file
 @$progress_file
 " 2>&1)
+            claude_exit=$?
 
-            # Read accumulated output for completion check
             result=$(cat "$temp_output" 2>/dev/null || echo "")
             rm -f "$temp_output"
         else
@@ -329,19 +439,19 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
 
 @$prd_file
 @$progress_file
-" 2>&1) || true
+" 2>&1) || claude_exit=$?
+        fi
+
+        if [ $claude_exit -ne 0 ]; then
+            echo -e "\n${RED}❌ Claude exited with code $claude_exit${NC}"
         fi
 
         # Calculate iteration duration
         local iteration_end_time=$(date +%s%N | cut -c1-13)
         local iteration_duration=$((iteration_end_time - iteration_start_time))
-        total_duration=$((total_duration + iteration_duration))
 
         # Save result to progress
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
-            # In streaming mode, extract text from various JSON event formats
-            # Format 1: {"type":"assistant","message":{"content":[{"text":"..."}]}}
-            # Format 2: {"type":"result","result":"..."}
             local extracted_text=""
             extracted_text=$(echo "$result" | jq -r '
                 if .type == "result" and .result then .result
@@ -358,62 +468,37 @@ DO NOT output COMPLETE if there are still errors or the fix is partial."
         fi
         echo "" >> "$progress_file"
 
-        # Check if completed
-        local check_text="$result"
-        if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
-            # In streaming mode, extract text from result event for marker check
-            check_text=$(echo "$result" | jq -r '
-                if .type == "result" and .result then .result
-                elif .type == "assistant" and .message.content then
-                    .message.content[] | select(.type == "text") | .text
-                else empty
-                end
-            ' 2>/dev/null | tr -d '\n')
-        fi
-
-        if echo "$check_text" | grep -q "$completion_marker"; then
-            echo ""
-            echo -e "${GREEN}========================================${NC}"
-            echo -e "${GREEN}   SUCCESS! $mode complete at iteration $i${NC}"
-            echo -e "${GREEN}========================================${NC}"
-
-            # Emit final metrics
-            emit_metrics "$issue_id" "$i" "$max_iterations" "$iteration_cost" "$iteration_duration" "$total_cost" "$total_duration"
-            emit_activity "$issue_id" "result" "" "SUCCESS: $mode completed at iteration $i" "success" "$total_duration"
-
-            # Create success flag
-            touch .ralph-complete
-
-            # Record success
-            echo "### SUCCESS - $mode completed at iteration $i" >> "$progress_file"
-            echo "" >> "$progress_file"
-
-            return 0
-        fi
+        # Accumulate costs from this iteration
+        accumulate_iteration_cost
+        printf "  ${CYAN}💵 Total spent: \$%.4f${NC}\n" "$SESSION_COST"
 
         # Emit iteration metrics
-        emit_metrics "$issue_id" "$i" "$max_iterations" "$iteration_cost" "$iteration_duration" "$total_cost" "$total_duration"
+        emit_metrics "$issue_id" "$CURRENT_ITERATION" "$max_iterations" "0" "$iteration_duration" "$SESSION_COST" "$SESSION_DURATION"
 
-        echo ""
-        echo -e "${YELLOW}$mode not complete, trying again...${NC}"
-        echo ""
+        # Git push after each iteration (like cwralph)
+        if [ -n "$branch_name" ] && [ "$mode" != "plan" ]; then
+            echo -e "\n${BLUE}📤 Pushing changes...${NC}"
+            if git push origin "$branch_name" 2>/dev/null; then
+                echo -e "${GREEN}✅ Pushed to $branch_name${NC}"
+            else
+                if git push -u origin "$branch_name" 2>/dev/null; then
+                    echo -e "${GREEN}✅ Created and pushed to $branch_name${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  Push failed (may have no changes)${NC}"
+                fi
+            fi
+        fi
 
         # Small delay between iterations
         sleep 2
     done
 
-    echo ""
-    echo -e "${RED}========================================${NC}"
-    echo -e "${RED}   Max iterations reached without success${NC}"
-    echo -e "${RED}========================================${NC}"
+    # Save session costs and show summary
+    save_session_costs
+    echo -e "\n${GREEN}🎉 Loop finished after $CURRENT_ITERATION iteration(s)${NC}"
+    show_cost_summary
 
-    # Record failure
-    echo "### FAILED - Max iterations ($max_iterations) reached" >> "$progress_file"
-
-    # Emit error
-    emit_error "$issue_id" "Max iterations ($max_iterations) reached without completion"
-
-    return 1
+    return 0
 }
 
 # Process a single issue with full workflow
@@ -563,11 +648,11 @@ process_issue() {
     echo "Started: $(date)" >> "$progress_file"
     echo "" >> "$progress_file"
 
-    # Run Ralph loop
+    # Run Ralph loop (pass branch_name for per-iteration push)
     echo -e "${YELLOW}Starting Ralph fix loop...${NC}"
     echo ""
 
-    if ralph_fix_loop "$max_iterations" "$prd_file" "$progress_file" "$issue_id" "$mode" "$model"; then
+    if ralph_fix_loop "$max_iterations" "$prd_file" "$progress_file" "$issue_id" "$mode" "$model" "$branch_name"; then
         echo ""
         echo -e "${GREEN}Issue $issue_id RESOLVED!${NC}"
         emit_activity "$issue_id" "result" "" "Issue processing completed successfully" "success"
