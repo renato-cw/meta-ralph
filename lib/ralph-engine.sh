@@ -11,6 +11,57 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # This enables processing issues that target external repositories
 source "$SCRIPT_DIR/lib/workspace-manager.sh" 2>/dev/null || true
 
+# Source interactive UI utilities for spinner (optional)
+# This enables loading animation while waiting for Claude response
+source "$SCRIPT_DIR/lib/interactive/ui.sh" 2>/dev/null || true
+
+# Source interactive summary for failure analysis (optional)
+source "$SCRIPT_DIR/lib/interactive/summary.sh" 2>/dev/null || true
+
+# ============================================================================
+# LOADING SPINNER
+# ============================================================================
+
+# Spinner state
+_SPINNER_PID=""
+_SPINNER_ACTIVE=false
+
+# Spinner characters (Braille pattern animation)
+_SPINNER_CHARS=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+
+# Start the thinking spinner
+# Usage: start_thinking_spinner
+start_thinking_spinner() {
+    # Don't start if already running or not in stream mode
+    [[ "$_SPINNER_ACTIVE" == "true" ]] && return
+    [[ "${RALPH_STREAM_MODE:-false}" != "true" ]] && return
+
+    _SPINNER_ACTIVE=true
+
+    (
+        local i=0
+        while true; do
+            printf "\r  ${YELLOW}${_SPINNER_CHARS[$i]}${NC} ${GRAY}Thinking...${NC}  "
+            i=$(( (i + 1) % ${#_SPINNER_CHARS[@]} ))
+            sleep 0.1
+        done
+    ) &
+    _SPINNER_PID=$!
+    disown $_SPINNER_PID 2>/dev/null
+}
+
+# Stop the thinking spinner and clear the line
+# Usage: stop_thinking_spinner
+stop_thinking_spinner() {
+    if [[ -n "$_SPINNER_PID" ]] && [[ "$_SPINNER_ACTIVE" == "true" ]]; then
+        kill $_SPINNER_PID 2>/dev/null
+        wait $_SPINNER_PID 2>/dev/null
+        _SPINNER_PID=""
+        _SPINNER_ACTIVE=false
+        printf "\r%*s\r" 40 ""  # Clear the spinner line
+    fi
+}
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -100,6 +151,90 @@ accumulate_iteration_cost() {
         done < "$ITERATION_COST_FILE"
         # Clear the temp file for next iteration
         > "$ITERATION_COST_FILE"
+    fi
+}
+
+# ============================================================================
+# FAILURE ANALYSIS
+# ============================================================================
+
+# Analyze failure and extract useful information
+# Args: progress_file, iterations_done, max_iterations
+analyze_failure() {
+    local progress_file="$1"
+    local iterations="$2"
+    local max_iterations="$3"
+    local issue_id="${4:-unknown}"
+
+    # Try to extract last error from progress file
+    local last_error=""
+    if [[ -f "$progress_file" ]]; then
+        # Look for error patterns in progress file
+        last_error=$(grep -iE "(error|fail|exception|panic|crash|rejected)" "$progress_file" 2>/dev/null | tail -1 || echo "")
+        if [[ -z "$last_error" ]]; then
+            # Get last substantive line
+            last_error=$(grep -v "^$\|^#\|^===" "$progress_file" 2>/dev/null | tail -1 || echo "No error captured")
+        fi
+    fi
+
+    # Calculate rough progress percentage based on iterations
+    local progress_pct=0
+    if [[ "$max_iterations" -gt 0 ]]; then
+        progress_pct=$((iterations * 100 / max_iterations))
+    fi
+
+    # Generate suggestions based on context
+    local suggestions=()
+
+    # Analyze error type and suggest accordingly
+    if echo "$last_error" | grep -qi "test"; then
+        suggestions+=("Review test expectations vs actual behavior")
+        suggestions+=("Check if mock data or fixtures need updating")
+    fi
+
+    if echo "$last_error" | grep -qi "build\|compile\|lint"; then
+        suggestions+=("Check for syntax errors in modified files")
+        suggestions+=("Verify import statements are correct")
+    fi
+
+    if echo "$last_error" | grep -qi "permission\|denied\|auth"; then
+        suggestions+=("Verify authentication tokens are valid")
+        suggestions+=("Check repository access permissions")
+    fi
+
+    # Always add generic suggestions
+    if [[ $iterations -lt $((max_iterations / 2)) ]]; then
+        suggestions+=("Try running with more iterations (current: $iterations)")
+    fi
+
+    suggestions+=("Review logs in progress file for detailed error trace")
+    suggestions+=("Consider simplifying the issue scope")
+
+    # Display failure analysis using summary module if available
+    if declare -f summary_failure_analysis >/dev/null 2>&1; then
+        summary_failure_analysis "$issue_id" "$last_error" "$iterations" "$progress_pct" "${suggestions[@]}"
+    else
+        # Fallback: simple failure display
+        echo ""
+        echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║${NC}  ${YELLOW}⚠️  ISSUE NOT RESOLVED - FAILURE ANALYSIS${NC}                   ${RED}║${NC}"
+        echo -e "${RED}╠══════════════════════════════════════════════════════════════╣${NC}"
+        printf "${RED}║${NC}  ${WHITE}Issue:${NC}     %-50s ${RED}║${NC}\n" "$issue_id"
+        printf "${RED}║${NC}  ${WHITE}Attempts:${NC}  %-50s ${RED}║${NC}\n" "$iterations iterations"
+        printf "${RED}║${NC}  ${WHITE}Progress:${NC}  %-50s ${RED}║${NC}\n" "${progress_pct}%"
+        echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
+        printf "${RED}║${NC}  ${WHITE}Last Error:${NC}                                                ${RED}║${NC}\n"
+        # Truncate error to fit in box
+        local truncated_error="${last_error:0:54}"
+        printf "${RED}║${NC}    ${GRAY}%-56s${NC} ${RED}║${NC}\n" "$truncated_error"
+        echo -e "${RED}║${NC}                                                              ${RED}║${NC}"
+        printf "${RED}║${NC}  ${WHITE}Suggestions:${NC}                                               ${RED}║${NC}\n"
+        for suggestion in "${suggestions[@]}"; do
+            local truncated_sug="${suggestion:0:54}"
+            printf "${RED}║${NC}    ${CYAN}•${NC} %-54s ${RED}║${NC}\n" "$truncated_sug"
+        done
+        echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
     fi
 }
 
@@ -323,14 +458,17 @@ ralph_fix_loop() {
     local work_dir
     work_dir="$(dirname "$prd_file")"
 
+    # Define implementation plan file path (unique per issue)
+    local impl_plan_file="$work_dir/IMPLEMENTATION_PLAN.md"
+
     local iteration_start_time
 
     # Initialize cost tracking
     init_cost_tracking
 
     # Setup signal handlers for clean exit
-    trap 'save_session_costs; cleanup_cost_tracking; echo -e "\n${YELLOW}⚠️  Interrupted by user${NC}"; show_cost_summary; exit 130' INT TERM
-    trap 'cleanup_cost_tracking' EXIT
+    trap 'stop_thinking_spinner; save_session_costs; cleanup_cost_tracking; echo -e "\n${YELLOW}⚠️  Interrupted by user${NC}"; show_cost_summary; exit 130' INT TERM
+    trap 'stop_thinking_spinner; cleanup_cost_tracking' EXIT
 
     # Get current branch if not provided
     if [ -z "$branch_name" ]; then
@@ -372,9 +510,16 @@ ralph_fix_loop() {
     if [[ "$mode" == "plan" ]]; then
         mode_instructions="You are analyzing an issue to create and refine an implementation plan. DO NOT make code changes.
 
+## IMPORTANT: Plan File Location
+
+The implementation plan for THIS SPECIFIC ISSUE must be stored at:
+\`$impl_plan_file\`
+
+This is a unique file for this issue - do NOT create IMPLEMENTATION_PLAN.md in any other location.
+
 ## Your Task
 
-If IMPLEMENTATION_PLAN.md exists, READ IT FIRST. Your job is to REFINE and IMPROVE the existing plan, not start from scratch.
+If the plan file exists (it will be provided in context), READ IT FIRST. Your job is to REFINE and IMPROVE the existing plan, not start from scratch.
 
 ## Iteration Strategy
 
@@ -386,12 +531,12 @@ Each iteration should go DEEPER:
 ## Instructions
 
 1. Read the PRD to understand the issue
-2. If IMPLEMENTATION_PLAN.md exists:
+2. If the plan file exists in context:
    - Review what was already discovered
    - Identify GAPS or UNCERTAINTIES in the current plan
    - Search code to validate/invalidate assumptions
    - Add newly discovered files or considerations
-3. If IMPLEMENTATION_PLAN.md doesn't exist, create it
+3. If the plan file doesn't exist, create it at: \`$impl_plan_file\`
 4. Use parallel subagents (up to 100) to search the codebase thoroughly
 5. Look for:
    - Files that need modification (use Grep/Glob extensively)
@@ -400,7 +545,7 @@ Each iteration should go DEEPER:
    - Potential side effects or breaking changes
    - TODOs, FIXMEs, or existing workarounds related to this issue
 
-## IMPLEMENTATION_PLAN.md Structure
+## Plan File Structure
 
 \`\`\`markdown
 # Implementation Plan: [Issue Title]
@@ -441,12 +586,20 @@ Each iteration should go DEEPER:
 
 ## CRITICAL RULES
 
-1. DO NOT modify any code files - only IMPLEMENTATION_PLAN.md
-2. DO NOT assume something exists - SEARCH and confirm
-3. DO NOT repeat previous discoveries - BUILD ON THEM
-4. Each iteration MUST add new information or mark something as validated"
+1. DO NOT modify any code files - only the plan file at \`$impl_plan_file\`
+2. DO NOT create IMPLEMENTATION_PLAN.md anywhere else - use ONLY the path above
+3. DO NOT assume something exists - SEARCH and confirm
+4. DO NOT repeat previous discoveries - BUILD ON THEM
+5. Each iteration MUST add new information or mark something as validated"
     else
         mode_instructions="You are a senior engineer implementing a fix. Your goal is COMPLETE, WORKING code - no stubs or placeholders.
+
+## IMPORTANT: Plan File Location
+
+If an implementation plan exists for this issue, it will be at:
+\`$impl_plan_file\`
+
+This is the unique plan file for THIS SPECIFIC ISSUE. Update it as you make progress.
 
 ## Pre-Implementation (CRITICAL)
 
@@ -460,11 +613,11 @@ Before writing ANY code:
 
 1. Read the PRD to understand the issue
 2. Read progress.txt to see what was already tried
-3. If IMPLEMENTATION_PLAN.md exists:
+3. If the plan file exists (provided in context):
    - Find the next unchecked item
    - Implement it COMPLETELY (no TODOs, no placeholders)
-   - Mark as complete: \`- [ ]\` → \`- [x]\`
-   - Document discoveries in the plan
+   - Mark as complete: \`- [ ]\` → \`- [x]\` in the plan file
+   - Document discoveries in the plan file
 4. If no plan exists, analyze and fix directly
 
 ## Quality Standards
@@ -505,7 +658,7 @@ Before finishing, verify:
 
 ## When You Discover Issues
 
-- Document in IMPLEMENTATION_PLAN.md immediately
+- Document in the plan file at \`$impl_plan_file\` immediately
 - Fix unrelated bugs you notice (don't ignore them)
 - Update progress.txt with learnings
 - If blocked, try alternative approach before giving up
@@ -516,7 +669,8 @@ Before finishing, verify:
 2. NEVER push --force
 3. NEVER leave placeholders/TODOs in new code
 4. ALWAYS search before implementing
-5. ALWAYS run tests before committing"
+5. ALWAYS run tests before committing
+6. ALWAYS use the specific plan file path above, NOT a generic IMPLEMENTATION_PLAN.md"
     fi
 
     # Determine Claude output format
@@ -566,7 +720,7 @@ Before finishing, verify:
 @$progress_file"
 
         # For plan mode, include IMPLEMENTATION_PLAN.md if it exists
-        local impl_plan_file="$work_dir/IMPLEMENTATION_PLAN.md"
+        # Note: impl_plan_file is defined at the start of ralph_fix_loop
         if [[ "$mode" == "plan" && -f "$impl_plan_file" ]]; then
             context_files="$context_files
 @$impl_plan_file"
@@ -584,11 +738,20 @@ Before finishing, verify:
         if [[ "${RALPH_STREAM_MODE:-false}" == "true" ]]; then
             # Streaming mode: use process substitution to avoid subshell issues
             local temp_output=$(mktemp)
+            local first_event=true
 
             emit_activity "$issue_id" "message" "" "Starting Claude (streaming mode)" "running"
 
+            # Start the thinking spinner while waiting for first response
+            start_thinking_spinner
+
             # Use process substitution - while runs in main shell, Claude output streams through
             while IFS= read -r line; do
+                # Stop spinner on first event
+                if [[ "$first_event" == "true" ]]; then
+                    stop_thinking_spinner
+                    first_event=false
+                fi
                 # Parse and emit the event to UI
                 parse_claude_event "$issue_id" "$line"
                 # Also save to temp file for result processing
@@ -599,6 +762,9 @@ Before finishing, verify:
 $context_files
 " 2>&1)
             claude_exit=$?
+
+            # Ensure spinner is stopped
+            stop_thinking_spinner
 
             result=$(cat "$temp_output" 2>/dev/null || echo "")
             rm -f "$temp_output"
@@ -892,6 +1058,10 @@ process_issue() {
     else
         echo ""
         echo -e "${RED}Issue $issue_id NOT resolved after $max_iterations attempts${NC}"
+
+        # Display failure analysis
+        analyze_failure "$progress_file" "$CURRENT_ITERATION" "$max_iterations" "$issue_id"
+
         emit_error "$issue_id" "Issue not resolved after $max_iterations attempts"
         return 1
     fi

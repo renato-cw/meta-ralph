@@ -299,6 +299,161 @@ create_profile_interactive() {
     echo "Profile '$profile_name' created in $profiles_file"
 }
 
+# ============================================================================
+# QUICK PROFILES / EXECUTION PRESETS
+# ============================================================================
+
+# Quick profile presets define common execution configurations
+# Each preset defines: mode, model, iterations, auto_push
+
+# Get preset configuration
+# Args: preset_name
+# Returns: mode|model|iterations|auto_push
+get_execution_preset() {
+    local preset="$1"
+
+    case "$preset" in
+        hotfix|1)
+            # Fast fix for urgent issues
+            echo "build|sonnet|5|true"
+            ;;
+        investigate|2)
+            # Analysis without code changes
+            echo "plan|opus|3|false"
+            ;;
+        standard|3)
+            # Default balanced approach
+            echo "plan+build|sonnet|10|true"
+            ;;
+        deep|deep-debug|4)
+            # Thorough debugging with powerful model
+            echo "build|opus|20|true"
+            ;;
+        quick|quick-fix|5)
+            # Minimal iteration quick fix
+            echo "build|sonnet|3|true"
+            ;;
+        thorough|6)
+            # Maximum thoroughness
+            echo "plan+build|opus|15|true"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Get preset description
+# Args: preset_name
+get_preset_description() {
+    local preset="$1"
+
+    case "$preset" in
+        hotfix|1)
+            echo "Fast fix for urgent issues (build, sonnet, 5 iters)"
+            ;;
+        investigate|2)
+            echo "Analysis only, no code changes (plan, opus, 3 iters)"
+            ;;
+        standard|3)
+            echo "Balanced approach (plan+build, sonnet, 10 iters)"
+            ;;
+        deep|deep-debug|4)
+            echo "Deep debugging (build, opus, 20 iters)"
+            ;;
+        quick|quick-fix|5)
+            echo "Minimal quick fix (build, sonnet, 3 iters)"
+            ;;
+        thorough|6)
+            echo "Maximum thoroughness (plan+build, opus, 15 iters)"
+            ;;
+        *)
+            echo "Unknown preset"
+            ;;
+    esac
+}
+
+# List all available presets
+list_presets() {
+    echo "hotfix investigate standard deep quick thorough"
+}
+
+# Display preset selection menu
+# Returns: preset config string (mode|model|iterations|auto_push)
+select_preset_interactive() {
+    echo ""
+    echo "Quick Execution Profiles:"
+    echo ""
+    echo "  1) 🔥 Hotfix      - Fast fix (build, sonnet, 5 iters)"
+    echo "  2) 🔍 Investigate - Analysis only (plan, opus, 3 iters)"
+    echo "  3) 🛠️  Standard    - Balanced (plan+build, sonnet, 10 iters)"
+    echo "  4) 🐛 Deep Debug  - Thorough (build, opus, 20 iters)"
+    echo "  5) ⚡ Quick Fix   - Minimal (build, sonnet, 3 iters)"
+    echo "  6) 📊 Thorough    - Maximum (plan+build, opus, 15 iters)"
+    echo "  c) Custom settings"
+    echo ""
+
+    while true; do
+        printf "Select preset or [c]ustom: "
+        read -r choice
+
+        case "$choice" in
+            1|hotfix)     get_execution_preset "hotfix"; return 0 ;;
+            2|investigate) get_execution_preset "investigate"; return 0 ;;
+            3|standard)   get_execution_preset "standard"; return 0 ;;
+            4|deep)       get_execution_preset "deep"; return 0 ;;
+            5|quick)      get_execution_preset "quick"; return 0 ;;
+            6|thorough)   get_execution_preset "thorough"; return 0 ;;
+            c|C|custom)   echo "custom"; return 0 ;;
+            b|B|back)     return 1 ;;
+            *)
+                echo "Invalid selection. Enter 1-6 or c for custom." >&2
+                ;;
+        esac
+    done
+}
+
+# Parse preset config string into variables
+# Args: config_string (mode|model|iterations|auto_push)
+# Sets: PRESET_MODE, PRESET_MODEL, PRESET_ITERATIONS, PRESET_AUTO_PUSH
+parse_preset_config() {
+    local config="$1"
+
+    PRESET_MODE=$(echo "$config" | cut -d'|' -f1)
+    PRESET_MODEL=$(echo "$config" | cut -d'|' -f2)
+    PRESET_ITERATIONS=$(echo "$config" | cut -d'|' -f3)
+    PRESET_AUTO_PUSH=$(echo "$config" | cut -d'|' -f4)
+}
+
+# Get profile's default execution preferences (if defined)
+# Args: profile_name
+# Returns: mode|model|iterations|auto_push or empty
+get_profile_execution_prefs() {
+    local profile="$1"
+
+    local mode=$(get_profile_setting "$profile" "default_mode")
+    local model=$(get_profile_setting "$profile" "default_model")
+    local iterations=$(get_profile_setting "$profile" "default_iterations")
+    local auto_push=$(get_profile_setting "$profile" "auto_push")
+
+    # Return empty if no preferences defined
+    if [[ -z "$mode" && -z "$model" && -z "$iterations" ]]; then
+        return 1
+    fi
+
+    # Fill in defaults for missing values
+    mode="${mode:-build}"
+    model="${model:-sonnet}"
+    iterations="${iterations:-10}"
+    auto_push="${auto_push:-true}"
+
+    echo "$mode|$model|$iterations|$auto_push"
+}
+
+# ============================================================================
+# HELP
+# ============================================================================
+
 # Show help
 profiles_help() {
     cat <<'EOF'
