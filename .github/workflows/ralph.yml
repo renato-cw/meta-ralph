@@ -1,0 +1,151 @@
+# Meta-Ralph workflow – run the interactive flow non-interactively (CI/GHA)
+#
+# This workflow mirrors ralph-interactive.sh: select provider, issues, mode, model,
+# and run plan/build. Use for scheduled runs or manual triggers.
+#
+# Required secrets (set in repo Settings > Secrets and variables > Actions):
+#   ANTHROPIC_API_KEY     - For Claude CLI (Ralph engine)
+#   GITHUB_TOKEN          - Usually provided by the runner; set if using GitHub provider
+#
+# Provider-specific secrets (only for the providers you use):
+#   Zeropath:  ZEROPATH_API_TOKEN_ID, ZEROPATH_API_TOKEN_SECRET,
+#              ZEROPATH_ORGANIZATION_ID, ZEROPATH_REPOSITORY_ID
+#   Sentry:   SENTRY_AUTH_TOKEN, SENTRY_ORGANIZATION, SENTRY_PROJECT
+#   Linear:   LINEAR_API_KEY, LINEAR_TEAM_ID
+#   Codecov:  CODECOV_API_TOKEN, CODECOV_OWNER, CODECOV_REPO
+#
+# Optional: Add a profiles.conf in the repo (or use a profile from another source)
+# and pass the profile name as the 'profile' input to load provider/repo mapping.
+
+name: Meta-Ralph
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Profile name (from profiles.conf)"
+        required: false
+        type: string
+      provider:
+        description: "Issue provider"
+        required: true
+        type: choice
+        options:
+          - all
+          - zeropath
+          - sentry
+          - linear
+          - codecov
+          - github
+        default: zeropath
+      issue_selection:
+        description: 'Issue IDs (comma-separated) or "all"'
+        required: true
+        type: string
+        default: "all"
+      max_issues:
+        description: 'Max issues when selection is "all"'
+        required: false
+        type: number
+        default: 5
+      mode:
+        description: "Processing mode"
+        required: true
+        type: choice
+        options:
+          - plan
+          - build
+          - plan+build
+        default: build
+      model:
+        description: "Claude model"
+        required: true
+        type: choice
+        options:
+          - sonnet
+          - opus
+        default: sonnet
+      plan_iterations:
+        description: "Plan phase iterations (plan or plan+build)"
+        required: false
+        type: number
+        default: 3
+      build_iterations:
+        description: "Build phase iterations (build or plan+build)"
+        required: false
+        type: number
+        default: 10
+      verbose:
+        description: "Verbose output"
+        required: false
+        type: boolean
+        default: true
+
+  # Optional: run on schedule (e.g. nightly) – override inputs via env in job
+  # schedule:
+  #   - cron: '0 2 * * *'
+
+concurrency:
+  group: meta-ralph-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ralph:
+    name: Run Meta-Ralph
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+
+    env:
+      PROVIDER: ${{ inputs.provider }}
+      ISSUE_IDS: ${{ inputs.issue_selection }}
+      MAX_ISSUES: ${{ inputs.max_issues }}
+      MODE: ${{ inputs.mode }}
+      MODEL: ${{ inputs.model }}
+      PLAN_ITERATIONS: ${{ inputs.plan_iterations }}
+      BUILD_ITERATIONS: ${{ inputs.build_iterations }}
+      VERBOSE: ${{ inputs.verbose }}
+      PROFILE: ${{ inputs.profile }}
+      # Provider/credential env (secrets) – config.sh does not overwrite if already set
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_OWNER: ${{ github.repository_owner }}
+      GITHUB_REPO: ${{ github.event.repository.name }}
+      ZEROPATH_API_TOKEN_ID: ${{ secrets.ZEROPATH_API_TOKEN_ID }}
+      ZEROPATH_API_TOKEN_SECRET: ${{ secrets.ZEROPATH_API_TOKEN_SECRET }}
+      ZEROPATH_ORGANIZATION_ID: ${{ secrets.ZEROPATH_ORGANIZATION_ID }}
+      ZEROPATH_REPOSITORY_ID: ${{ secrets.ZEROPATH_REPOSITORY_ID }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORGANIZATION: ${{ secrets.SENTRY_ORGANIZATION }}
+      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
+      CODECOV_API_TOKEN: ${{ secrets.CODECOV_API_TOKEN }}
+      CODECOV_OWNER: ${{ secrets.CODECOV_OWNER }}
+      CODECOV_REPO: ${{ secrets.CODECOV_REPO }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install Claude CLI
+        run: |
+          if command -v claude >/dev/null 2>&1; then
+            echo "Claude CLI already available"
+            claude --version || true
+          else
+            npm install -g @anthropic-ai/claude-code || true
+            if ! command -v claude >/dev/null 2>&1; then
+              echo "::warning::Claude CLI not in PATH. Add it to PATH or use a self-hosted runner with claude installed."
+            fi
+          fi
+
+      - name: Run Meta-Ralph (non-interactive)
+        run: |
+          chmod +x ./ralph-non-interactive.sh
+          ./ralph-non-interactive.sh
